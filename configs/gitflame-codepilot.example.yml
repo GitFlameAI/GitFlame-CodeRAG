@@ -1,0 +1,48 @@
+version: 1
+
+repository:
+  default_branch: main
+  target_branch_prefix: ai/
+
+analysis:
+  enabled: true
+  include:
+    - backend/**
+    - frontend/**
+    - src/**
+    - internal/**
+  exclude:
+    - node_modules/**
+    - dist/**
+    - build/**
+    - .git/**
+    - vendor/**
+    - "*.lock"
+
+code_generation:
+  enabled: true
+  require_user_approval: true
+  reviewer_policy: issue_author
+
+recommendations:
+  enabled: true
+  severity_threshold: medium
+  categories:
+    - security
+    - maintainability
+    - performance
+    - architecture
+    - code_duplication
+
+context:
+  max_files: 20
+  max_file_size_kb: 120
+  max_snippets_per_file: 3
+  snippet_radius_lines: 20
+  external_rag:
+    enabled: true
+    timeout_ms: 8000
+    fallback: simple_file_filtering
+
+storage:
+  recommendation_ttl_days: 30
