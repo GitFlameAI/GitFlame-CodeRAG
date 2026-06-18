@@ -1,0 +1,21 @@
+services:
+  database:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: gitflame_coderag
+      POSTGRES_USER: gitflame
+      POSTGRES_PASSWORD: gitflame
+    ports:
+      - "5432:5432"
+    volumes:
+      - coderag-postgres:/var/lib/postgresql/data
+      - ./migrations/001_initial.sql:/docker-entrypoint-initdb.d/001_initial.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gitflame -d gitflame_coderag"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  coderag-postgres:
+

@@ -1,0 +1,45 @@
+version: 1
+
+repository:
+  name: sample-repository
+  default_branch: main
+  language_priority:
+    - python
+    - go
+    - javascript
+    - typescript
+
+analysis:
+  enabled: true
+  include:
+    - "src/**"
+    - "app/**"
+    - "internal/**"
+    - "backend/**"
+    - "frontend/src/**"
+  exclude:
+    - "node_modules/**"
+    - "dist/**"
+    - "build/**"
+    - ".git/**"
+    - "vendor/**"
+    - "**/__pycache__/**"
+
+chunking:
+  strategy: ast_aware
+  fallback_strategy: fixed_window
+  max_chunk_lines: 80
+  overlap_lines: 10
+
+retrieval:
+  top_k: 10
+  use_bm25: true
+  use_dense: true
+  use_ast_candidates: true
+  fusion_method: rrf
+
+embeddings:
+  model: jinaai/jina-embeddings-v2-base-code
+  normalize_vectors: true
+  batch_size: 32
+
