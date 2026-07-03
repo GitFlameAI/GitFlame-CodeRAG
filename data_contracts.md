@@ -11,6 +11,7 @@ different field names.
 | Schemas and AST chunking | Danil | `schemas.py`, `chunking/`, `retrieval/ast.py` |
 | Repository ingestion | Kirill | `config/`, `ingestion/` |
 | BM25 | Zhenya | `retrieval/bm25.py` |
+| Reranking and final ranking | Zhenya | `retrieval/reranker.py` |
 | Embeddings and dense search | Karim | `embeddings/`, `retrieval/dense.py` |
 | Persistence | Martin | `storage/`, `migrations/` |
 
@@ -70,6 +71,29 @@ compute_mrr(results: list[RetrievalResult], relevant_chunk_ids: set[str], k: int
 compute_map_ndcg(runs: list[tuple[list[RetrievalResult], set[str]]], k: int) -> dict[str, float]
 ```
 
+### Reranking (Sprint 2)
+
+The reranker is a stage **after** RRF: it rescores the fused candidates with a cross-encoder and
+returns the final top-k ordering. It consumes the RRF `RetrievalResult` list plus a
+`chunk_id -> CodeChunk` lookup (for the chunk content) and returns `RetrievalResult` objects with
+`source="reranker"` and `reranker_score` populated; component scores (`bm25_score` / `dense_score` /
+`ast_score` / `rrf_score`) are preserved. Reranked results map onto `EvidenceChunk.scores.reranker`
+when building final evidence. When the model is unavailable the stage falls back to RRF order.
+
+```python
+load_reranker_model(model_name: str = ..., device: str = "cpu") -> CrossEncoderLike | None
+build_reranker_input(query: str, chunk: CodeChunk, max_pair_chars: int = 2000) -> tuple[str, str]
+score_query_chunk_pair(model: CrossEncoderLike, query: str, chunk: CodeChunk) -> float
+rerank_candidates(query: str, candidates: list[RetrievalResult], chunks_by_id: dict[str, CodeChunk], model=None, *, top_k: int, ...) -> list[RetrievalResult]
+reranker_fallback(candidates: list[RetrievalResult], *, top_k: int) -> list[RetrievalResult]
+compare_rrf_vs_reranker(cases: list[RerankerCase], *, model=None, k_values=(1, 3, 5, 10), ...) -> dict
+```
+
+The default reranker model is `cross-encoder/ms-marco-MiniLM-L-6-v2` (lightweight, CPU, no extra
+dependencies); the model is configurable via `AIConfig.reranker` (`RerankerConfig`). Tunable
+hyperparameters live there: `reranker_top_k` (RRF candidate pool fed to the reranker) and
+`final_top_k` (final evidence count).
+
 ### Storage
 
 Storage functions receive schema models and return persisted identifiers or schema models. Database
@@ -113,4 +137,6 @@ load_chunks_for_repository(repository_id: str, revision: str) -> list[CodeChunk]
 - Chunk embeddings are keyed by `(chunk_id, embedding_model)` so the main code embedding model
   can be compared with a lightweight baseline without overwriting vectors.
 - Retrieval results always state their source and rank.
+- Reranked results use `source="reranker"`, set `reranker_score`, and preserve upstream component
+  scores; `reranker_score` stays `None` when the reranker did not run (fallback to RRF order).
 - `expected_chunks` is not required in Sprint 1.
