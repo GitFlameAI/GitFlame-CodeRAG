@@ -15,7 +15,11 @@ from gitflame_coderag.retrieval.reranker import (
     rerank_candidates,
     reranker_fallback,
     score_query_chunk_pair,
-)
+  
+from gitflame_coderag.retrieval.dense import (
+    cosine_similarity,
+    dense_search,
+    rank_dense_results,
 from gitflame_coderag.retrieval.rrf import rrf_fusion
 
 __all__ = [
@@ -28,9 +32,12 @@ __all__ = [
     "build_reranker_input",
     "compare_rrf_vs_reranker",
     "load_reranker_model",
-    "rank_bm25_results",
     "rerank_candidates",
     "reranker_fallback",
+    "cosine_similarity",
+    "dense_search",
+    "rank_bm25_results",
+    "rank_dense_results",
     "rrf_fusion",
     "score_query_chunk_pair",
     "tokenize_for_bm25",
