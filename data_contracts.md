@@ -51,8 +51,24 @@ extract_keywords_from_chunk(chunk: CodeChunk) -> ChunkKeywords
 build_bm25_index(chunks: list[CodeChunk]) -> BM25Index
 bm25_search(query: str, index: BM25Index, top_k: int) -> list[RetrievalResult]
 dense_search(query_vector: list[float], embeddings: list[ChunkEmbedding], top_k: int) -> list[RetrievalResult]
+dense_retrieval_pgvector(
+    query: str,
+    vector_store: Any,
+    top_k: int,
+    embedding_model: str,
+    repository_id: str | None = None,
+    revision: str | None = None,
+) -> list[RetrievalResult]
 ast_candidate_search(keywords: list[str], chunks: list[CodeChunk], top_k: int) -> list[RetrievalResult]
 rrf_fusion(rankings: list[list[RetrievalResult]], top_k: int, rrf_k: int = 60) -> list[RetrievalResult]
+```
+
+### Metrics
+
+```python
+compute_recall_at_k(results: list[RetrievalResult], relevant_chunk_ids: set[str], k: int) -> float
+compute_mrr(results: list[RetrievalResult], relevant_chunk_ids: set[str], k: int | None = None) -> float
+compute_map_ndcg(runs: list[tuple[list[RetrievalResult], set[str]]], k: int) -> dict[str, float]
 ```
 
 ### Reranking (Sprint 2)
@@ -91,6 +107,20 @@ save_structural_metadata(metadata: StructuralMetadata) -> None
 save_bm25_text(chunk_id: str, text: str) -> None
 save_embedding_text(chunk_id: str, text: str) -> None
 save_embedding_vector(embedding: ChunkEmbedding) -> None
+save_chunk_embedding(embedding: ChunkEmbedding) -> None
+load_chunk_embeddings(
+    repository_id: str | None = None,
+    revision: str | None = None,
+    embedding_model: str | None = None,
+) -> list[ChunkEmbedding]
+create_vector_index(embedding_model: str, dimensions: int) -> str
+search_similar_chunks(
+    query_vector: list[float],
+    embedding_model: str,
+    top_k: int,
+    repository_id: str | None = None,
+    revision: str | None = None,
+) -> list[RetrievalResult]
 save_keywords(keywords: ChunkKeywords) -> None
 load_chunks_for_repository(repository_id: str, revision: str) -> list[CodeChunk]
 ```
@@ -104,6 +134,8 @@ load_chunks_for_repository(repository_id: str, revision: str) -> list[CodeChunk]
 - Split chunks use `parent_chunk_id` to point to the original large chunk id and
   `split_index` / `split_count` to preserve part order.
 - Search texts and embeddings reference an existing `chunk_id`.
+- Chunk embeddings are keyed by `(chunk_id, embedding_model)` so the main code embedding model
+  can be compared with a lightweight baseline without overwriting vectors.
 - Retrieval results always state their source and rank.
 - Reranked results use `source="reranker"`, set `reranker_score`, and preserve upstream component
   scores; `reranker_score` stays `None` when the reranker did not run (fallback to RRF order).
