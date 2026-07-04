@@ -120,7 +120,6 @@ CREATE TABLE IF NOT EXISTS retrieval_results (
     dense_score DOUBLE PRECISION,
     ast_score DOUBLE PRECISION,
     rrf_score DOUBLE PRECISION,
-    evidence_reason TEXT,
     UNIQUE (retrieval_run_id, chunk_id)
 );
 

@@ -89,6 +89,57 @@ class RerankerConfig(ContractModel):
     max_pair_chars: int = Field(default=2000, ge=1)
 
 
+class ExperimentConfig(ContractModel):
+    """Configuration for one retrieval experiment run.
+
+    This model describes which retrievers are active, how many candidates each
+    stage keeps, and whether RRF/reranking are part of the run. It is intentionally
+    storage-agnostic so the same config can drive in-memory and DB-backed runs.
+    """
+
+    name: str
+
+    use_bm25: bool = True
+    use_dense: bool = True
+    use_ast: bool = True
+    use_rrf: bool = True
+    use_reranker: bool = True
+
+    bm25_top_k: int = Field(default=50, ge=1)
+    dense_top_k: int = Field(default=50, ge=1)
+    ast_top_k: int = Field(default=50, ge=1)
+
+    rrf_k: int = Field(default=60, ge=0)
+    rrf_top_k: int = Field(default=50, ge=1)
+
+    reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    reranker_top_k: int = Field(default=50, ge=1)
+    final_top_k: int = Field(default=10, ge=1)
+    reranker_device: str = "cpu"
+    reranker_batch_size: int = Field(default=32, ge=1)
+    reranker_max_pair_chars: int = Field(default=2000, ge=1)
+
+    embedding_model: str = "jinaai/jina-embeddings-v2-base-code"
+    random_seed: int = 42
+
+    @model_validator(mode="after")
+    def validate_pipeline_shape(self) -> ExperimentConfig:
+        enabled_retrievers = sum((self.use_bm25, self.use_dense, self.use_ast))
+        if enabled_retrievers == 0:
+            raise ValueError("at least one retriever must be enabled")
+        if enabled_retrievers > 1 and not self.use_rrf:
+            raise ValueError("multiple retrievers require RRF fusion")
+        if self.use_reranker and not self.use_rrf:
+            raise ValueError("reranker requires RRF candidates")
+        if self.use_reranker and self.reranker_top_k > self.rrf_top_k:
+            raise ValueError("reranker_top_k must be less than or equal to rrf_top_k")
+        if self.use_reranker and self.final_top_k > self.reranker_top_k:
+            raise ValueError("final_top_k must be less than or equal to reranker_top_k")
+        if not self.use_reranker and self.final_top_k > self.rrf_top_k:
+            raise ValueError("final_top_k must be less than or equal to rrf_top_k")
+        return self
+
+
 class AIConfig(ContractModel):
     version: int = 1
     include: list[str] = Field(default_factory=lambda: ["**/*"])
@@ -185,7 +236,6 @@ class RetrievalResult(ContractModel):
     ast_score: float | None = None
     rrf_score: float | None = None
     reranker_score: float | None = None
-    evidence_reason: str | None = None
 
 
 class EvidenceScores(ContractModel):
@@ -207,4 +257,17 @@ class EvidenceChunk(ContractModel):
     end_line: int = Field(ge=1)
     content: str
     scores: EvidenceScores = Field(default_factory=EvidenceScores)
-    evidence_reason: str
+    source_signals: list[Literal["bm25", "dense", "ast", "rrf", "reranker"]] = Field(
+        default_factory=list
+    )
+
+
+class EvidenceBuildWarning(ContractModel):
+    code: str
+    message: str
+    chunk_id: str | None = None
+
+
+class EvidenceBuildResult(ContractModel):
+    evidence_chunks: list[EvidenceChunk]
+    warnings: list[EvidenceBuildWarning] = Field(default_factory=list)

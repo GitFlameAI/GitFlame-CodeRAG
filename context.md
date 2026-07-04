@@ -539,7 +539,6 @@ No `expected_chunks` in Sprint 1.
 - `dense_score`
 - `ast_score`
 - `rrf_score`
-- `evidence_reason`
 
 ### EvidenceChunk
 
@@ -560,11 +559,39 @@ This is the final output format for top-k retrieval.
     "bm25": 12.4,
     "dense": 0.82,
     "ast": 1.0,
-    "rrf": 0.048
+    "rrf": 0.048,
+    "reranker": 0.91
   },
-  "evidence_reason": "Matched issue keywords and selected as HTTP handler by AST-Grep."
+  "source_signals": ["bm25", "dense", "ast", "rrf", "reranker"]
 }
 ```
+
+`build_evidence_chunks()` returns `EvidenceBuildResult`, not a bare list. Missing chunks are
+reported in `warnings` with `code="missing_chunk"`, while valid evidence chunks are still returned.
+
+### ExperimentConfig
+
+`ExperimentConfig` defines one Sprint 2 retrieval experiment mode. It controls which retrievers are
+enabled, how many candidates each stage keeps, how RRF is configured, whether reranking is enabled,
+and how many final evidence chunks are returned.
+
+Core fields:
+
+- `name`
+- `use_bm25`, `use_dense`, `use_ast`
+- `use_rrf`, `rrf_k`, `rrf_top_k`
+- `use_reranker`, `reranker_model`, `reranker_top_k`, `final_top_k`
+- `reranker_device`, `reranker_batch_size`, `reranker_max_pair_chars`
+- `bm25_top_k`, `dense_top_k`, `ast_top_k`
+- `embedding_model`
+- `random_seed`
+
+Important validation rules:
+
+- at least one retriever must be enabled;
+- multiple retrievers require RRF;
+- reranker requires RRF candidates;
+- when reranker is enabled: `final_top_k <= reranker_top_k <= rrf_top_k`.
 
 ## Database Tables
 
@@ -739,8 +766,7 @@ retrieval_results (
     bm25_score REAL,
     dense_score REAL,
     ast_score REAL,
-    rrf_score REAL,
-    evidence_reason TEXT
+    rrf_score REAL
 )
 ```
 
@@ -831,4 +857,3 @@ Sprint 1 is complete when:
 - experiments comparing BM25, dense, AST, and hybrid retrieval;
 - issue-to-plan prompt integration;
 - plan-to-code generation.
-
