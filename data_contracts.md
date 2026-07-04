@@ -61,7 +61,13 @@ dense_retrieval_pgvector(
 ) -> list[RetrievalResult]
 ast_candidate_search(keywords: list[str], chunks: list[CodeChunk], top_k: int) -> list[RetrievalResult]
 rrf_fusion(rankings: list[list[RetrievalResult]], top_k: int, rrf_k: int = 60) -> list[RetrievalResult]
+build_evidence_scores(result: RetrievalResult) -> EvidenceScores
+build_evidence_chunks(results: list[RetrievalResult], chunks_by_id: dict[str, CodeChunk], top_k: int | None = None) -> EvidenceBuildResult
 ```
+
+`build_evidence_chunks()` returns `EvidenceBuildResult`: final `evidence_chunks` plus `warnings`.
+Missing chunks are reported as `EvidenceBuildWarning(code="missing_chunk", chunk_id=...)` and the
+builder continues, so experiments do not fail silently or stop on one inconsistent result.
 
 ### Metrics
 
@@ -70,6 +76,38 @@ compute_recall_at_k(results: list[RetrievalResult], relevant_chunk_ids: set[str]
 compute_mrr(results: list[RetrievalResult], relevant_chunk_ids: set[str], k: int | None = None) -> float
 compute_map_ndcg(runs: list[tuple[list[RetrievalResult], set[str]]], k: int) -> dict[str, float]
 ```
+
+### Experiment Config (Sprint 2)
+
+`ExperimentConfig` describes one retrieval experiment mode: enabled retrievers, per-stage top-k
+limits, RRF parameters, reranker settings, embedding model, and random seed.
+
+```python
+ExperimentConfig(
+    name: str,
+    use_bm25: bool = True,
+    use_dense: bool = True,
+    use_ast: bool = True,
+    use_rrf: bool = True,
+    use_reranker: bool = True,
+    bm25_top_k: int = 50,
+    dense_top_k: int = 50,
+    ast_top_k: int = 50,
+    rrf_k: int = 60,
+    rrf_top_k: int = 50,
+    reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2",
+    reranker_top_k: int = 50,
+    final_top_k: int = 10,
+    reranker_device: str = "cpu",
+    reranker_batch_size: int = 32,
+    reranker_max_pair_chars: int = 2000,
+    embedding_model: str = "jinaai/jina-embeddings-v2-base-code",
+    random_seed: int = 42,
+)
+```
+
+Validation rules: at least one retriever must be enabled; multiple retrievers require RRF;
+reranker requires RRF candidates; `final_top_k <= reranker_top_k <= rrf_top_k` when reranker is on.
 
 ### Reranking (Sprint 2)
 

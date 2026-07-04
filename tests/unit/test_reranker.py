@@ -96,7 +96,6 @@ def test_reranker_fallback_keeps_rrf_order_and_reassigns_ranks() -> None:
     # reranker did not run: scores untouched, source stays rrf
     assert all(r.reranker_score is None for r in result)
     assert all(r.source == "rrf" for r in result)
-    assert "reranker unavailable" in result[0].evidence_reason
 
 
 def test_rerank_candidates_reorders_by_model_score() -> None:

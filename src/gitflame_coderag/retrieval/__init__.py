@@ -15,12 +15,18 @@ from gitflame_coderag.retrieval.reranker import (
     rerank_candidates,
     reranker_fallback,
     score_query_chunk_pair,
-  
+)
+
 from gitflame_coderag.retrieval.dense import (
     cosine_similarity,
     dense_retrieval_pgvector,
     dense_search,
     rank_dense_results,
+)
+from gitflame_coderag.retrieval.evidence import (
+    build_evidence_chunks,
+    build_evidence_scores,
+    build_source_signals,
 )
 from gitflame_coderag.retrieval.metrics import (
     compute_average_precision_at_k,
@@ -39,6 +45,8 @@ __all__ = [
     "build_bm25_index",
     "build_bm25_query",
     "build_bm25_text",
+    "build_evidence_chunks",
+    "build_evidence_scores",
     "compute_average_precision_at_k",
     "compute_map_ndcg",
     "compute_mrr",
@@ -46,6 +54,7 @@ __all__ = [
     "compute_recall_at_k",
     "build_reranker_input",
     "compare_rrf_vs_reranker",
+    "build_source_signals",
     "load_reranker_model",
     "rerank_candidates",
     "reranker_fallback",

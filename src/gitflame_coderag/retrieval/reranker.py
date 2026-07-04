@@ -167,7 +167,6 @@ def rerank_candidates(
                     "score": score,
                     "source": "reranker",
                     "reranker_score": score,
-                    "evidence_reason": f"reranked by cross-encoder {model_name}",
                 }
             )
         )
@@ -191,7 +190,6 @@ def reranker_fallback(
             candidate.model_copy(
                 update={
                     "rank": rank,
-                    "evidence_reason": "reranker unavailable; kept RRF order",
                 }
             )
         )
