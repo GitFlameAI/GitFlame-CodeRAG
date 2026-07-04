@@ -10,8 +10,12 @@ from gitflame_coderag.schemas import (
     ChunkEmbedding,
     ChunkKeywords,
     CodeChunk,
+    ExperimentRun,
     FileMetadata,
+    Issue,
     Repository,
+    RetrievalResult,
+    RetrievalRun,
     StructuralMetadata,
 )
 from gitflame_coderag.storage import CodeRAGRepository, create_engine_from_url, run_migrations
@@ -56,8 +60,11 @@ def _sample_ids() -> tuple[str, str, str]:
     return repository_id, file_id, chunk_id
 
 
-def test_storage_round_trip(repository: CodeRAGRepository) -> None:
+def _seed_repository_bundle(
+    repository: CodeRAGRepository,
+) -> tuple[str, str, str, str, CodeChunk]:
     repository_id, file_id, chunk_id = _sample_ids()
+    issue_id = f"test_issue_{uuid.uuid4().hex[:8]}"
     revision = "main"
 
     repository.save_repository(
@@ -68,6 +75,17 @@ def test_storage_round_trip(repository: CodeRAGRepository) -> None:
             revision=revision,
             root_path="/tmp/sample",
             created_at=datetime(2026, 1, 1, tzinfo=UTC),
+        )
+    )
+
+    repository.save_issue(
+        Issue(
+            id=issue_id,
+            repository_id=repository_id,
+            title="Login returns 401",
+            body="Users cannot authenticate after refresh.",
+            labels=["bug", "auth"],
+            expected_files=["src/auth/routes.py"],
         )
     )
 
@@ -148,6 +166,12 @@ def test_storage_round_trip(repository: CodeRAGRepository) -> None:
             path_tokens=["src", "auth", "routes"],
         )
     )
+
+    return repository_id, revision, issue_id, chunk_id, chunk
+
+
+def test_storage_round_trip(repository: CodeRAGRepository) -> None:
+    repository_id, revision, _issue_id, chunk_id, chunk = _seed_repository_bundle(repository)
 
     loaded_chunks = repository.load_chunks_for_repository(repository_id, revision)
 
@@ -245,3 +269,158 @@ def test_save_search_texts_do_not_overwrite_each_other(repository: CodeRAGReposi
 
     assert row["bm25_text"] == "bm25-value"
     assert row["embedding_text"] == "embedding-value"
+
+
+def test_load_issue(repository: CodeRAGRepository) -> None:
+    repository_id, _revision, issue_id, _chunk_id, _chunk = _seed_repository_bundle(repository)
+
+    loaded = repository.load_issue(issue_id)
+
+    assert loaded is not None
+    assert loaded.id == issue_id
+    assert loaded.repository_id == repository_id
+    assert loaded.title == "Login returns 401"
+    assert loaded.labels == ["bug", "auth"]
+    assert loaded.expected_files == ["src/auth/routes.py"]
+    assert repository.load_issue("missing-issue") is None
+
+
+def test_load_chunks_with_metadata(repository: CodeRAGRepository) -> None:
+    repository_id, revision, _issue_id, chunk_id, _chunk = _seed_repository_bundle(repository)
+
+    loaded = repository.load_chunks_with_metadata(repository_id, revision)
+
+    assert len(loaded.chunks) == 1
+    assert loaded.chunks[0].id == chunk_id
+    assert chunk_id in loaded.metadata
+    assert loaded.metadata[chunk_id].defined_symbols == ["login"]
+
+
+def test_load_chunk_embeddings(repository: CodeRAGRepository) -> None:
+    repository_id, revision, _issue_id, chunk_id, _chunk = _seed_repository_bundle(repository)
+
+    embeddings = repository.load_chunk_embeddings(repository_id, revision)
+
+    assert len(embeddings) == 1
+    assert embeddings[0].chunk_id == chunk_id
+    assert len(embeddings[0].vector) == 768
+
+    filtered = repository.load_chunk_embeddings(
+        repository_id,
+        revision,
+        embedding_model="missing-model",
+    )
+    assert filtered == []
+
+
+def test_load_repository_bundle(repository: CodeRAGRepository) -> None:
+    repository_id, revision, _issue_id, chunk_id, _chunk = _seed_repository_bundle(repository)
+
+    bundle = repository.load_repository_bundle(repository_id, revision)
+
+    assert bundle.repository_id == repository_id
+    assert bundle.revision == revision
+    assert len(bundle.chunks) == 1
+    assert chunk_id in bundle.metadata
+    assert len(bundle.embeddings) == 1
+    assert chunk_id in bundle.keywords
+    assert chunk_id in bundle.search_texts
+    assert bundle.search_texts[chunk_id].bm25_text == "auth login routes python handler"
+
+
+def test_save_retrieval_and_experiment_runs(repository: CodeRAGRepository) -> None:
+    repository_id, revision, issue_id, chunk_id, _chunk = _seed_repository_bundle(repository)
+    experiment_id = f"exp_{uuid.uuid4().hex[:8]}"
+    retrieval_run_id = f"run_{uuid.uuid4().hex[:8]}"
+
+    repository.save_experiment_run(
+        ExperimentRun(
+            id=experiment_id,
+            name="hybrid_rrf",
+            description="BM25 + dense + AST with RRF",
+            repository_id=repository_id,
+            revision=revision,
+            ai_config={"retrieval": {"fusion_method": "rrf", "top_k": 10}},
+            embedding_model="jinaai/jina-embeddings-v2-base-code",
+            status="running",
+            created_at=datetime(2026, 3, 1, tzinfo=UTC),
+        )
+    )
+
+    repository.save_retrieval_run(
+        RetrievalRun(
+            id=retrieval_run_id,
+            repository_id=repository_id,
+            issue_id=issue_id,
+            query_text="Login returns 401 after refresh",
+            query_keywords=["login", "401", "auth"],
+            top_k=10,
+            retrieval_config={"use_bm25": True, "use_dense": True, "use_ast_candidates": True},
+            experiment_run_id=experiment_id,
+            created_at=datetime(2026, 3, 1, 1, tzinfo=UTC),
+        )
+    )
+
+    repository.save_retrieval_results(
+        retrieval_run_id,
+        [
+            RetrievalResult(
+                chunk_id=chunk_id,
+                rank=1,
+                score=0.048,
+                source="rrf",
+                bm25_score=12.4,
+                dense_score=0.82,
+                ast_score=1.0,
+                rrf_score=0.048,
+                evidence_reason="Matched auth keywords and login handler.",
+            )
+        ],
+    )
+
+    with repository.engine.connect() as connection:
+        experiment_row = (
+            connection.execute(
+                text("SELECT name, revision FROM experiment_runs WHERE id = :id"),
+                {"id": experiment_id},
+            )
+            .mappings()
+            .one()
+        )
+        run_row = (
+            connection.execute(
+                text(
+                    """
+                    SELECT experiment_run_id, query_keywords
+                    FROM retrieval_runs
+                    WHERE id = :id
+                    """
+                ),
+                {"id": retrieval_run_id},
+            )
+            .mappings()
+            .one()
+        )
+        result_row = (
+            connection.execute(
+                text(
+                    """
+                    SELECT rank, bm25_score, rrf_score, evidence_reason
+                    FROM retrieval_results
+                    WHERE retrieval_run_id = :retrieval_run_id
+                    """
+                ),
+                {"retrieval_run_id": retrieval_run_id},
+            )
+            .mappings()
+            .one()
+        )
+
+    assert experiment_row["name"] == "hybrid_rrf"
+    assert experiment_row["revision"] == revision
+    assert run_row["experiment_run_id"] == experiment_id
+    assert run_row["query_keywords"] == ["login", "401", "auth"]
+    assert result_row["rank"] == 1
+    assert result_row["bm25_score"] == pytest.approx(12.4)
+    assert result_row["rrf_score"] == pytest.approx(0.048)
+    assert result_row["evidence_reason"] == "Matched auth keywords and login handler."

@@ -102,6 +102,7 @@ rows must not leak into retrieval and chunking packages.
 ```python
 save_repository(repository: Repository) -> None
 save_file_metadata(metadata: FileMetadata) -> None
+save_issue(issue: Issue) -> None
 save_chunk(chunk: CodeChunk) -> None
 save_structural_metadata(metadata: StructuralMetadata) -> None
 save_bm25_text(chunk_id: str, text: str) -> None
@@ -122,7 +123,14 @@ search_similar_chunks(
     revision: str | None = None,
 ) -> list[RetrievalResult]
 save_keywords(keywords: ChunkKeywords) -> None
+save_retrieval_run(run: RetrievalRun) -> None
+save_retrieval_results(retrieval_run_id: str, results: list[RetrievalResult]) -> None
+save_experiment_run(experiment: ExperimentRun) -> None
+load_issue(issue_id: str) -> Issue | None
 load_chunks_for_repository(repository_id: str, revision: str) -> list[CodeChunk]
+load_chunks_with_metadata(repository_id: str, revision: str) -> ChunksWithMetadata
+load_chunk_embeddings(repository_id: str, revision: str, *, embedding_model: str | None = None) -> list[ChunkEmbedding]
+load_repository_bundle(repository_id: str, revision: str, *, embedding_model: str | None = None) -> RepositoryBundle
 ```
 
 ## Invariants

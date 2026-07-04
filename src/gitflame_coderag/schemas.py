@@ -164,6 +164,37 @@ class ChunkEmbedding(ContractModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
+class ChunksWithMetadata(ContractModel):
+    chunks: list[CodeChunk]
+    metadata: dict[str, StructuralMetadata]
+
+
+class RepositoryBundle(ContractModel):
+    """All persisted search artifacts needed to run retrieval for one repo revision."""
+
+    repository_id: str
+    revision: str
+    chunks: list[CodeChunk]
+    metadata: dict[str, StructuralMetadata]
+    embeddings: list[ChunkEmbedding]
+    keywords: dict[str, ChunkKeywords] = Field(default_factory=dict)
+    search_texts: dict[str, ChunkSearchTexts] = Field(default_factory=dict)
+
+
+class ExperimentRun(ContractModel):
+    id: str
+    name: str
+    description: str = ""
+    repository_id: str
+    revision: str
+    ai_config: dict[str, Any] = Field(default_factory=dict)
+    embedding_model: str
+    status: Literal["running", "completed", "failed"] = "running"
+    notes: str = ""
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    completed_at: datetime | None = None
+
+
 class RetrievalRun(ContractModel):
     id: str
     repository_id: str
@@ -172,6 +203,7 @@ class RetrievalRun(ContractModel):
     query_keywords: list[str] = Field(default_factory=list)
     top_k: int = Field(ge=1)
     retrieval_config: dict[str, Any] = Field(default_factory=dict)
+    experiment_run_id: str | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 

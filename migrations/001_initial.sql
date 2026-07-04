@@ -124,6 +124,43 @@ CREATE TABLE IF NOT EXISTS retrieval_results (
     UNIQUE (retrieval_run_id, chunk_id)
 );
 
+CREATE TABLE IF NOT EXISTS experiment_runs (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    repository_id TEXT NOT NULL REFERENCES repositories(id) ON DELETE CASCADE,
+    revision TEXT NOT NULL,
+    ai_config JSONB NOT NULL DEFAULT '{}'::jsonb,
+    embedding_model TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'running'
+        CHECK (status IN ('running', 'completed', 'failed')),
+    notes TEXT NOT NULL DEFAULT '',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    completed_at TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS experiment_metrics (
+    id BIGSERIAL PRIMARY KEY,
+    experiment_run_id TEXT NOT NULL REFERENCES experiment_runs(id) ON DELETE CASCADE,
+    issue_id TEXT REFERENCES issues(id) ON DELETE SET NULL,
+    metric_name TEXT NOT NULL,
+    k INTEGER CHECK (k IS NULL OR k > 0),
+    metric_value DOUBLE PRECISION NOT NULL,
+    UNIQUE (experiment_run_id, issue_id, metric_name, k)
+);
+
+ALTER TABLE retrieval_runs
+    ADD COLUMN IF NOT EXISTS experiment_run_id TEXT
+        REFERENCES experiment_runs(id) ON DELETE SET NULL;
+
+
+CREATE INDEX IF NOT EXISTS idx_experiment_runs_repo_revision
+    ON experiment_runs(repository_id, revision);
+CREATE INDEX IF NOT EXISTS idx_experiment_metrics_run
+    ON experiment_metrics(experiment_run_id);
+CREATE INDEX IF NOT EXISTS idx_retrieval_runs_experiment
+    ON retrieval_runs(experiment_run_id);
+
 CREATE INDEX IF NOT EXISTS idx_repository_files_repo_revision
     ON repository_files(repository_id, revision);
 CREATE INDEX IF NOT EXISTS idx_code_chunks_repo_path
