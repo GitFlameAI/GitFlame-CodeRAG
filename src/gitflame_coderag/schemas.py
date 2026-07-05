@@ -303,3 +303,9 @@ class EvidenceBuildWarning(ContractModel):
 class EvidenceBuildResult(ContractModel):
     evidence_chunks: list[EvidenceChunk]
     warnings: list[EvidenceBuildWarning] = Field(default_factory=list)
+
+
+class RetrievalPipelineResult(ContractModel):
+    retrieval_run_id: str | None = None
+    evidence: EvidenceBuildResult
+    results: list[RetrievalResult] = Field(default_factory=list)

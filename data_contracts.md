@@ -185,4 +185,7 @@ load_repository_bundle(repository_id: str, revision: str, *, embedding_model: st
 - Retrieval results always state their source and rank.
 - Reranked results use `source="reranker"`, set `reranker_score`, and preserve upstream component
   scores; `reranker_score` stays `None` when the reranker did not run (fallback to RRF order).
+- `RetrievalRun.experiment_run_id` is kept for Sprint 2 experiment tracking only. Before a
+  production version, remove it from the normal retrieval path or move it behind a separate
+  experiment-only adapter.
 - `expected_chunks` is not required in Sprint 1.

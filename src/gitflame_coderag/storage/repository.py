@@ -589,37 +589,44 @@ class CodeRAGRepository:
                             retrieval_run_id,
                             chunk_id,
                             rank,
+                            source,
+                            score,
                             bm25_score,
                             dense_score,
                             ast_score,
                             rrf_score,
-                            evidence_reason
+                            reranker_score
                         )
                         VALUES (
                             :retrieval_run_id,
                             :chunk_id,
                             :rank,
+                            :source,
+                            :score,
                             :bm25_score,
                             :dense_score,
                             :ast_score,
                             :rrf_score,
-                            :evidence_reason
+                            :reranker_score
                         )
                         ON CONFLICT (retrieval_run_id, chunk_id) DO UPDATE SET
                             rank = EXCLUDED.rank,
+                            source = EXCLUDED.source,
+                            score = EXCLUDED.score,
                             bm25_score = EXCLUDED.bm25_score,
                             dense_score = EXCLUDED.dense_score,
                             ast_score = EXCLUDED.ast_score,
                             rrf_score = EXCLUDED.rrf_score,
-                            evidence_reason = EXCLUDED.evidence_reason
+                            reranker_score = EXCLUDED.reranker_score
                         """
                     ),
                     {
                         "retrieval_run_id": retrieval_run_id,
                         "chunk_id": result.chunk_id,
                         "rank": result.rank,
+                        "source": result.source,
+                        "score": result.score,
                         **scores,
-                        "evidence_reason": result.evidence_reason,
                     },
                 )
 
@@ -906,6 +913,9 @@ def _result_scores_for_storage(result: RetrievalResult) -> dict[str, float | Non
         "rrf_score": result.rrf_score
         if result.rrf_score is not None
         else (result.score if result.source == "rrf" else None),
+        "reranker_score": result.reranker_score
+        if result.reranker_score is not None
+        else (result.score if result.source == "reranker" else None),
     }
 
 

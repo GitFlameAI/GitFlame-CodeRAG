@@ -373,7 +373,6 @@ def test_save_retrieval_and_experiment_runs(repository: CodeRAGRepository) -> No
                 dense_score=0.82,
                 ast_score=1.0,
                 rrf_score=0.048,
-                evidence_reason="Matched auth keywords and login handler.",
             )
         ],
     )
@@ -405,7 +404,7 @@ def test_save_retrieval_and_experiment_runs(repository: CodeRAGRepository) -> No
             connection.execute(
                 text(
                     """
-                    SELECT rank, bm25_score, rrf_score, evidence_reason
+                    SELECT rank, source, score, bm25_score, rrf_score, reranker_score
                     FROM retrieval_results
                     WHERE retrieval_run_id = :retrieval_run_id
                     """
@@ -421,6 +420,8 @@ def test_save_retrieval_and_experiment_runs(repository: CodeRAGRepository) -> No
     assert run_row["experiment_run_id"] == experiment_id
     assert run_row["query_keywords"] == ["login", "401", "auth"]
     assert result_row["rank"] == 1
+    assert result_row["source"] == "rrf"
+    assert result_row["score"] == pytest.approx(0.048)
     assert result_row["bm25_score"] == pytest.approx(12.4)
     assert result_row["rrf_score"] == pytest.approx(0.048)
-    assert result_row["evidence_reason"] == "Matched auth keywords and login handler."
+    assert result_row["reranker_score"] is None

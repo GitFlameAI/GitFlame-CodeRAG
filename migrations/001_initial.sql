@@ -116,10 +116,13 @@ CREATE TABLE IF NOT EXISTS retrieval_results (
     retrieval_run_id TEXT NOT NULL REFERENCES retrieval_runs(id) ON DELETE CASCADE,
     chunk_id TEXT NOT NULL REFERENCES code_chunks(id) ON DELETE CASCADE,
     rank INTEGER NOT NULL CHECK (rank > 0),
+    source TEXT NOT NULL DEFAULT 'rrf',
+    score DOUBLE PRECISION NOT NULL DEFAULT 0,
     bm25_score DOUBLE PRECISION,
     dense_score DOUBLE PRECISION,
     ast_score DOUBLE PRECISION,
     rrf_score DOUBLE PRECISION,
+    reranker_score DOUBLE PRECISION,
     UNIQUE (retrieval_run_id, chunk_id)
 );
 
@@ -151,6 +154,15 @@ CREATE TABLE IF NOT EXISTS experiment_metrics (
 ALTER TABLE retrieval_runs
     ADD COLUMN IF NOT EXISTS experiment_run_id TEXT
         REFERENCES experiment_runs(id) ON DELETE SET NULL;
+
+ALTER TABLE retrieval_results
+    ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'rrf';
+
+ALTER TABLE retrieval_results
+    ADD COLUMN IF NOT EXISTS score DOUBLE PRECISION NOT NULL DEFAULT 0;
+
+ALTER TABLE retrieval_results
+    ADD COLUMN IF NOT EXISTS reranker_score DOUBLE PRECISION;
 
 
 CREATE INDEX IF NOT EXISTS idx_experiment_runs_repo_revision
