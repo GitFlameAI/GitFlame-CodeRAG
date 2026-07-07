@@ -109,6 +109,23 @@ ExperimentConfig(
 Validation rules: at least one retriever must be enabled; multiple retrievers require RRF;
 reranker requires RRF candidates; `final_top_k <= reranker_top_k <= rrf_top_k` when reranker is on.
 
+### Experiment Runner (Sprint 2)
+
+```python
+run_experiment_suite(
+    repository: CodeRAGRepository,
+    configs: list[ExperimentConfig],
+    repositories: list[tuple[str, str]],  # repository_id, revision
+    *,
+    issue_ids_by_repository: dict[str, list[str]] | None = None,
+    reranker_model: CrossEncoderLike | None = None,
+) -> ExperimentSuiteResult
+```
+
+The runner creates `ExperimentRun` records, executes `run_retrieval_from_db()` for each selected
+issue, persists retrieval runs/results through the DB wrapper, records per-issue latency, and keeps
+per-issue failures isolated. It does not compute metrics; metrics are a separate layer.
+
 ### Reranking (Sprint 2)
 
 The reranker is a stage **after** RRF: it rescores the fused candidates with a cross-encoder and
@@ -185,4 +202,7 @@ load_repository_bundle(repository_id: str, revision: str, *, embedding_model: st
 - Retrieval results always state their source and rank.
 - Reranked results use `source="reranker"`, set `reranker_score`, and preserve upstream component
   scores; `reranker_score` stays `None` when the reranker did not run (fallback to RRF order).
+- `RetrievalRun.experiment_run_id` is kept for Sprint 2 experiment tracking only. Before a
+  production version, remove it from the normal retrieval path or move it behind a separate
+  experiment-only adapter.
 - `expected_chunks` is not required in Sprint 1.
