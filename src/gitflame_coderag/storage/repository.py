@@ -716,6 +716,28 @@ class CodeRAGRepository:
             return None
         return _row_to_issue(row)
 
+    def load_issues_for_repository(self, repository_id: str) -> list[Issue]:
+        with self.engine.connect() as connection:
+            rows = connection.execute(
+                text(
+                    """
+                    SELECT
+                        id,
+                        repository_id,
+                        title,
+                        body,
+                        labels,
+                        expected_files
+                    FROM issues
+                    WHERE repository_id = :repository_id
+                    ORDER BY id
+                    """
+                ),
+                {"repository_id": repository_id},
+            ).mappings()
+
+        return [_row_to_issue(row) for row in rows]
+
     def load_chunks_for_repository(self, repository_id: str, revision: str) -> list[CodeChunk]:
         with self.engine.connect() as connection:
             rows = connection.execute(
