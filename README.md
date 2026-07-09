@@ -9,6 +9,8 @@ code embeddings, AST-Grep structural candidates, and Reciprocal Rank Fusion.
 
 - `context.md`: complete project and Sprint context for humans and coding agents;
 - `data_contracts.md`: shared function and storage contracts;
+- `reports/sprint3_karim_deployment_vector_storage.md`: Sprint 3 handoff for vector storage,
+  indexing, deployment and maintenance presentation sections;
 - `schemas.py`: executable Pydantic schemas;
 - `configs/repository.example.yml`: repository configuration template.
 
@@ -37,4 +39,3 @@ uv run pytest
 
 Sprint 1 delivers datasets/config loading, shared contracts, AST-aware chunks, storage,
 BM25 retrieval, and dense retrieval prototypes. See `context.md` for ownership and scope.
-
