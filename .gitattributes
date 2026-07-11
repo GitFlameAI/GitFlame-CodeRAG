@@ -1,4 +1,7 @@
-# Synthetic Sprint 1 evaluation dataset: keep it in the repo, but exclude it
-# from GitHub language statistics and collapse it in diffs/PRs.
-datasets/repositories/** linguist-generated=true
-datasets/repositories/** linguist-vendored=true
+# Synthetic evaluation dataset: keep it committed, but keep git/GitHub from
+# "showing" it -- excluded from language stats, collapsed as generated in PRs,
+# and treated as non-diffable so `git diff`/`git show` do not print its contents.
+datasets/repositories/**        linguist-generated=true linguist-vendored=true
+datasets/medium_repositories/** linguist-generated=true linguist-vendored=true -diff
+datasets/large_repositories/**  linguist-generated=true linguist-vendored=true -diff
+datasets/dataset_overview.csv   linguist-generated=true

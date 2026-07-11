@@ -1,0 +1,7 @@
+{"id": "repo_medium_002_issue_001", "title": "Incorrect total when threshold is high", "body": "Incorrect total when threshold is high.", "labels": ["bug", "logic"], "expected_files": ["src/pkg_000/module_00000.py"]}
+{"id": "repo_medium_002_issue_002", "title": "Aggregation ignores non-numeric records", "body": "Aggregation ignores non-numeric records.", "labels": ["bug", "validation"], "expected_files": ["src/pkg_000/module_00014.py"]}
+{"id": "repo_medium_002_issue_003", "title": "Add pagination to aggregation results", "body": "Add pagination to aggregation results.", "labels": ["enhancement", "api"], "expected_files": ["src/pkg_000/module_00028.py"]}
+{"id": "repo_medium_002_issue_004", "title": "Negative totals should map to 400 not 500", "body": "Negative totals should map to 400 not 500.", "labels": ["bug", "api"], "expected_files": ["src/pkg_000/module_00042.py"]}
+{"id": "repo_medium_002_issue_005", "title": "Support custom threshold per request", "body": "Support custom threshold per request.", "labels": ["enhancement", "config"], "expected_files": ["src/pkg_001/module_00056.py"]}
+{"id": "repo_medium_002_issue_006", "title": "Performance regression on large inputs", "body": "Performance regression on large inputs.", "labels": ["performance"], "expected_files": ["src/pkg_001/module_00070.py"]}
+{"id": "repo_medium_002_issue_007", "title": "Add structured logging around aggregation", "body": "Add structured logging around aggregation.", "labels": ["enhancement", "observability"], "expected_files": ["src/pkg_001/module_00084.py"]}
