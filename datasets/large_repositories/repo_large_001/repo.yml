@@ -1,7 +1,7 @@
 version: 1
 
 repository:
-  name: synthetic-scale-001
+  name: repo-large-001
   default_branch: main
   language_priority:
     - python

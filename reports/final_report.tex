@@ -46,7 +46,7 @@ end-to-end retrieval pipeline and its evaluation. The pipeline an issue is expan
 (lexical BM25, dense code embeddings, and AST-structural candidates) generate
 candidates, their rankings are fused with Reciprocal Rank Fusion (RRF), and a
 cross-encoder reranker produces the final ranking. We evaluate the pipeline on a
-curated dataset of twelve synthetic repositories with 84 issues and known
+curated, tiered dataset of 22 synthetic repositories (about 1.25M code chunks) with known
 \emph{expected files}, using Recall@K, MRR and MAP/NDCG, and quantify the
 contribution of each component through ablations and statistical significance
 tests. This report presents the dataset, method, experimental protocol and
@@ -79,28 +79,32 @@ Fusion, a simple and robust rank-aggregation method, followed by a cross-encoder
 
 \section{Dataset}
 \label{sec:dataset}
-The data-collection stage of the project produced a curated, license-safe dataset of twelve small synthetic
-repositories spanning five languages. Each repository contains realistic source
-files (functions, classes, handlers, imports), a \texttt{repo.yml} configuration
-following the project template, and seven GitHub-like issues. Each issue provides
-\texttt{id}, \texttt{title}, \texttt{body}, \texttt{labels} and \texttt{expected\_files};
-\texttt{expected\_chunks} are intentionally out of scope. The \texttt{expected\_files}
-serve as ground truth for retrieval evaluation: for every issue we know which files
-contain the evidence a correct system should surface. All 130 expected files are
-verified to exist in the repositories and to survive the \texttt{analysis} include/exclude
-filtering of their config (Section~\ref{sec:repro}).
+The evaluation dataset is organised into three size tiers so that retrieval and
+indexing can be exercised from small, human-readable repositories up to
+codebase-scale inputs. The \emph{small} tier contains 15 curated multi-language
+repositories with realistic source files (functions, classes, handlers, imports);
+the \emph{medium} tier adds 5 synthetic repositories of 50{,}000 chunks each; and
+the \emph{large} tier adds 2 repositories of 500{,}000 chunks each, for roughly
+1.25M code chunks in total. Every repository ships a \texttt{repo.yml} configuration
+and seven GitHub-like issues; each issue provides \texttt{id}, \texttt{title},
+\texttt{body}, \texttt{labels} and \texttt{expected\_files} (the ground-truth
+retrieval labels), while \texttt{expected\_chunks} are intentionally out of scope.
+Under the default \texttt{ast\_aware} chunking each top-level definition becomes one
+chunk, so the synthetic tiers are sized directly in chunk units. Table~\ref{tab:datagroups}
+summarises every repository grouped by tier.
 
 \begin{table}[h]
 \centering
-\caption{Per-repository overview of the evaluation dataset.}
-\label{tab:dataset}
-\small
-\input{tables/dataset_overview.tex}
+\caption{Dataset overview across the three size tiers: files, chunks,
+issues and expected-file labels per repository, with per-tier subtotals and grand total.}
+\label{tab:datagroups}
+\footnotesize
+\input{tables/dataset_groups.tex}
 \end{table}
 
 \begin{table}[h]
 \centering
-\caption{Repository count by declared language.}
+\caption{Language distribution of the small tier.}
 \label{tab:langs}
 \input{tables/language_distribution.tex}
 \end{table}
@@ -232,7 +236,7 @@ experiment matrix and hyperparameter grid. The manifest is produced by
 \texttt{validate\_experiment\_inputs()}, which reuses the ingestion functions to
 confirm that each \texttt{.yml} parses, code files load, issues are well-formed, and
 every \texttt{expected\_file} exists and passes config filtering. On the current
-dataset all twelve repositories validate with zero errors. Report tables are
+small tier all 15 repositories validate with zero errors. Report tables are
 regenerated from the manifest and results by \texttt{scripts/build\_latex\_tables.py},
 so the document stays consistent with the data.
 
@@ -247,10 +251,8 @@ dataset toward \texttt{expected\_chunks} for finer-grained evaluation.
 \begin{thebibliography}{9}
 \bibitem{bm25} S.~Robertson and H.~Zaragoza. \emph{The Probabilistic Relevance
 Framework: BM25 and Beyond}. Foundations and Trends in Information Retrieval, 2009.
-\bibitem{rrf} G.~V.~Cormack, C.~L.~A.~Clarke, and S.~Buettcher. \emph{Reciprocal Rank
-Fusion Outperforms Condorcet and Individual Rank Learning Methods}. SIGIR, 2009.
-\bibitem{dpr} V.~Karpukhin et al. \emph{Dense Passage Retrieval for Open-Domain
-Question Answering}. EMNLP, 2020.
+\bibitem{rrf} G.~V.~Cormack, C.~L.~A.~Clarke, and S.~Buettcher. \emph{Reciprocal Rank Fusion Outperforms Condorcet and Individual Rank Learning Methods}. SIGIR, 2009.
+\bibitem{dpr} V.~Karpukhin et al. \emph{Dense Passage Retrieval for Open-Domain Question Answering}. EMNLP, 2020.
 \end{thebibliography}
 
 \end{document}
