@@ -226,6 +226,62 @@ reports/results/significance.json}}
 \placeholder{Discussion of which signals help which issue types, and whether the
 reranker gain over RRF is significant, to be written once results are in.}
 
+\section{Deployment and Vector Storage}
+\label{sec:deployment}
+The deployment target is deliberately simple: a Python 3.12 application process for
+indexing and retrieval, backed by PostgreSQL 16 with the \texttt{pgvector}
+extension. The local setup already reflects this target through the
+\texttt{pgvector/pgvector:pg16} Docker image, SQL migrations and the SQLAlchemy
+storage adapter. The online retrieval path assumes that chunks, search texts,
+keywords and embeddings have been precomputed; expensive embedding rebuilds are
+treated as offline maintenance jobs rather than per-query work.
+
+\paragraph{Vector storage.} PostgreSQL stores raw source artifacts and derived
+search artifacts separately. \texttt{repository\_files} keeps original file content
+and content hashes, \texttt{code\_chunks} keeps raw chunk content, paths, line
+ranges and AST-level symbols, \texttt{chunk\_structural\_metadata} stores imports,
+calls and defined/referenced symbols, and \texttt{chunk\_search\_texts} stores
+separate BM25 and embedding text representations. Embeddings live in
+\texttt{chunk\_embeddings} and are keyed by \texttt{(chunk\_id, embedding\_model)}.
+This allows the primary code model
+\texttt{jinaai/}\allowbreak\texttt{jina-embeddings-v2-base-code} and a
+lightweight baseline such as \texttt{sentence-transformers/}\allowbreak
+\texttt{all-MiniLM-L6-v2} to coexist without overwriting each other.
+
+\paragraph{Indexing.} The storage layer creates model-specific pgvector indexes
+over \texttt{chunk\_embeddings}. For interactive dense retrieval the preferred
+index is HNSW with cosine distance, built as a partial index for one embedding
+model and one vector dimension. Dense search embeds the issue query, orders chunks
+by pgvector cosine distance, filters by repository and revision, and returns dense
+candidates for RRF fusion with BM25 and AST candidates.
+
+\paragraph{Maintenance.} Incremental maintenance is driven by file and chunk
+\texttt{content\_hash} values. Unchanged chunks keep their existing vectors; changed
+chunks regenerate \texttt{embedding\_text} and upsert a new vector; deleted chunks
+are removed through the chunk row and cascading foreign keys; a new embedding model
+is added as an additional \texttt{embedding\_model} value. For large rebuilds the
+old vectors and index should keep serving queries until the new model-specific
+rows and index are ready.
+
+\paragraph{Resource requirements.} A local demo can run on 4 CPU cores, 8--16 GB
+RAM and roughly 20 GB of disk. A 500k-chunk CPU deployment should plan for
+8--16 CPU cores, 32 GB RAM and 50--100 GB of SSD storage. GPU is optional for
+serving dense search with precomputed vectors, but useful for batch embedding
+generation and reranker experiments. A 768-dimensional float32 embedding for
+500k chunks is about 1.43 GiB before PostgreSQL and HNSW index overhead; raw chunk
+content, search texts, metadata, experiment logs and indexes make the practical
+disk target several times larger.
+
+\paragraph{Latency and cost.} With precomputed embeddings and a warm HNSW index,
+pgvector dense search over 500k vectors is expected to be on the order of
+tens to a few hundreds of milliseconds. Query embedding usually dominates the
+dense-only path on CPU; reranking dominates the full quality path because a
+cross-encoder must score query--chunk pairs. The expected production trade-off is
+therefore \texttt{Full RRF} for faster responses and \texttt{Full RRF + Reranker}
+when quality matters more than latency. The default stack uses local open-source
+models, so there is no per-query API cost; the main costs are CPU/GPU time for
+embedding rebuilds, PostgreSQL storage and backups.
+
 \section{Reproducibility}
 \label{sec:repro}
 Every experiment input is described by a single generated manifest,
