@@ -1,6 +1,6 @@
 # Dataset Layout
 
-This ships **15 synthetic sample repositories** under
+This ships **18 synthetic sample repositories** under
 `datasets/repositories/<repository_id>/`, plus larger scale-test fixtures
 under `datasets/medium_repositories/` and `datasets/large_repositories/`.
 
@@ -40,8 +40,11 @@ All code is original/synthetic and license-safe to commit; issues are marked
 | repo_013_python_lru_cache | python-lru-cache | python |
 | repo_014_python_task_queue | python-task-queue | python |
 | repo_015_python_state_machine | python-state-machine | python |
+| repo_016_java_spring_library | library-lending-api | java |
+| repo_017_dotnet_hotel_booking | dotnet-hotel-booking | csharp |
+| repo_018_ruby_rails_billing | rails-subscription-billing | ruby |
 
-105 issues and 86 code files in total. Each repository has realistic,
+126 issues and 328 code files in total. Each repository has realistic,
 distinct code (own domain, own bugs) plus real test files, so this group is
 the one to use for retrieval-**quality** evaluation (recall@k, MRR, NDCG).
 

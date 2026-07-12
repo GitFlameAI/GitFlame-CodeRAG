@@ -95,6 +95,11 @@ class ExperimentConfig(ContractModel):
     This model describes which retrievers are active, how many candidates each
     stage keeps, and whether RRF/reranking are part of the run. It is intentionally
     storage-agnostic so the same config can drive in-memory and DB-backed runs.
+
+    The ``doc_*`` fields configure the document-selection stage of the two-stage
+    pipeline (see ``pipelines/two_stage_retrieve.py``): whole files are ranked
+    first, and only the selected ones are split with AST-Grep. They are ignored
+    when ``use_two_stage`` is false.
     """
 
     name: str
@@ -112,6 +117,20 @@ class ExperimentConfig(ContractModel):
     rrf_k: int = Field(default=60, ge=0)
     rrf_top_k: int = Field(default=50, ge=1)
 
+    use_two_stage: bool = False
+    doc_use_bm25: bool = True
+    doc_use_dense: bool = True
+    doc_use_ast: bool = False
+    doc_use_rrf: bool = True
+    doc_bm25_top_k: int = Field(default=100, ge=1)
+    doc_dense_top_k: int = Field(default=100, ge=1)
+    doc_ast_top_k: int = Field(default=100, ge=1)
+    doc_top_k: int = Field(default=20, ge=1)
+    # Weight of the stage-1 document rank as an extra RRF vote in the chunk stage.
+    # At 0 the chunk stage forgets which document ranked first, and a chunk of the
+    # best document competes on equal footing with a chunk of the last one.
+    doc_prior_weight: float = Field(default=1.0, ge=0.0)
+
     reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
     reranker_top_k: int = Field(default=50, ge=1)
     final_top_k: int = Field(default=10, ge=1)
@@ -120,6 +139,7 @@ class ExperimentConfig(ContractModel):
     reranker_max_pair_chars: int = Field(default=2000, ge=1)
 
     embedding_model: str = "jinaai/jina-embeddings-v2-base-code"
+    embedding_batch_size: int = Field(default=32, ge=1)
     random_seed: int = 42
 
     @model_validator(mode="after")
@@ -137,6 +157,14 @@ class ExperimentConfig(ContractModel):
             raise ValueError("final_top_k must be less than or equal to reranker_top_k")
         if not self.use_reranker and self.final_top_k > self.rrf_top_k:
             raise ValueError("final_top_k must be less than or equal to rrf_top_k")
+        if self.use_two_stage:
+            enabled_doc_retrievers = sum(
+                (self.doc_use_bm25, self.doc_use_dense, self.doc_use_ast)
+            )
+            if enabled_doc_retrievers == 0:
+                raise ValueError("two-stage retrieval requires at least one document retriever")
+            if enabled_doc_retrievers > 1 and not self.doc_use_rrf:
+                raise ValueError("multiple document retrievers require RRF fusion")
         return self
 
 
@@ -307,5 +335,26 @@ class EvidenceBuildResult(ContractModel):
 
 class RetrievalPipelineResult(ContractModel):
     retrieval_run_id: str | None = None
+    evidence: EvidenceBuildResult
+    results: list[RetrievalResult] = Field(default_factory=list)
+
+
+class DocumentCandidate(ContractModel):
+    """One whole-file document selected by stage 1 of the two-stage pipeline."""
+
+    chunk_id: str
+    file_id: str
+    path: str
+    language: str
+    rank: int = Field(ge=1)
+    score: float
+    source: Literal["bm25", "dense", "ast", "rrf"]
+
+
+class TwoStageRetrievalResult(ContractModel):
+    """Output of document selection -> AST split -> chunk retrieval."""
+
+    documents: list[DocumentCandidate] = Field(default_factory=list)
+    chunk_count: int = Field(default=0, ge=0)
     evidence: EvidenceBuildResult
     results: list[RetrievalResult] = Field(default_factory=list)

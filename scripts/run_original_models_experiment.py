@@ -6,6 +6,15 @@ It does not require Postgres: it indexes the dataset in memory, runs
 BM25 / Dense / AST -> RRF -> reranker, computes file-level metrics from issue.expected_files,
 and writes a single JSON artifact with environment info, smoke tests, metrics, per-issue output,
 and all errors that happened along the way.
+
+Two pipelines can be run (``--pipeline``):
+
+``flat``
+    Chunk the whole repository with AST-Grep up front and retrieve over all chunks.
+``two_stage``
+    Rank whole files first (no AST-Grep), split only the selected files with AST-Grep,
+    then retrieve the final chunks from those files. Reported metrics include the
+    stage-1 document recall, which upper-bounds what the chunk stage can find.
 """
 
 from __future__ import annotations
@@ -17,7 +26,7 @@ import platform
 import subprocess
 import sys
 import traceback
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
@@ -31,7 +40,21 @@ from gitflame_coderag.embeddings import embed_chunks, embed_query
 from gitflame_coderag.experiments.validation import validate_dataset
 from gitflame_coderag.ingestion import filter_files_by_config, load_issues, load_repository_files
 from gitflame_coderag.pipelines.retrieve_issue import build_issue_query, run_retrieval_core
-from gitflame_coderag.schemas import CodeChunk, EvidenceChunk, ExperimentConfig, Issue
+from gitflame_coderag.pipelines.two_stage_retrieve import (
+    build_document_index,
+    make_chunk_embedder,
+    make_document_expander,
+    run_two_stage_retrieval,
+)
+from gitflame_coderag.schemas import (
+    AIConfig,
+    DocumentCandidate,
+    EvidenceBuildResult,
+    EvidenceChunk,
+    ExperimentConfig,
+    Issue,
+    RepositoryFile,
+)
 
 DEFAULT_EMBEDDING_MODEL = "jinaai/jina-embeddings-v2-base-code"
 DEFAULT_RERANKER_MODEL = "cross-encoder/ms-marco-MiniLM-L6-v2"
@@ -46,6 +69,15 @@ class ExperimentError:
     issue_id: str | None = None
     error_type: str | None = None
     traceback: str | None = None
+
+
+@dataclass
+class IssueRetrieval:
+    """One issue's retrieval output, shared by both pipelines."""
+
+    evidence: EvidenceBuildResult
+    documents: list[DocumentCandidate] = field(default_factory=list)
+    chunk_count: int = 0
 
 
 def main() -> int:
@@ -115,6 +147,7 @@ def main() -> int:
         "repositories": 0,
         "issues": 0,
         "selected_files": 0,
+        "documents": 0,
         "chunks": 0,
     }
 
@@ -167,6 +200,26 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--k-values", type=parse_k_values, default=DEFAULT_K_VALUES)
     parser.add_argument("--max-pair-chars", type=int, default=2000)
     parser.add_argument("--fail-fast", action="store_true")
+    parser.add_argument(
+        "--pipeline",
+        choices=("flat", "two_stage"),
+        default="flat",
+        help="flat: AST-chunk the whole repo. two_stage: rank whole files first, "
+        "then AST-split only the selected ones.",
+    )
+    parser.add_argument(
+        "--doc-top-k",
+        type=int,
+        default=20,
+        help="two_stage: how many documents (files) stage 1 forwards to the AST split.",
+    )
+    parser.add_argument("--doc-bm25-top-k", type=int, default=100)
+    parser.add_argument("--doc-dense-top-k", type=int, default=100)
+    parser.add_argument(
+        "--doc-use-ast",
+        action="store_true",
+        help="two_stage: also rank documents by AST metadata overlap (off by default).",
+    )
     return parser.parse_args()
 
 
@@ -181,8 +234,9 @@ def make_experiment_config(args: argparse.Namespace) -> ExperimentConfig:
     final_top_k = max(args.k_values)
     reranker_top_k = max(args.reranker_top_k, final_top_k)
     rrf_top_k = max(args.rrf_top_k, reranker_top_k)
+    two_stage = args.pipeline == "two_stage"
     return ExperimentConfig(
-        name="original_models_full_rrf_reranker",
+        name=f"original_models_{args.pipeline}_rrf_reranker",
         use_bm25=True,
         use_dense=True,
         use_ast=True,
@@ -193,6 +247,14 @@ def make_experiment_config(args: argparse.Namespace) -> ExperimentConfig:
         ast_top_k=args.ast_top_k,
         rrf_k=args.rrf_k,
         rrf_top_k=rrf_top_k,
+        use_two_stage=two_stage,
+        doc_use_bm25=True,
+        doc_use_dense=True,
+        doc_use_ast=args.doc_use_ast,
+        doc_use_rrf=True,
+        doc_bm25_top_k=args.doc_bm25_top_k,
+        doc_dense_top_k=args.doc_dense_top_k,
+        doc_top_k=args.doc_top_k,
         reranker_model=args.reranker_model,
         reranker_top_k=reranker_top_k,
         final_top_k=final_top_k,
@@ -200,6 +262,7 @@ def make_experiment_config(args: argparse.Namespace) -> ExperimentConfig:
         reranker_batch_size=args.reranker_batch_size,
         reranker_max_pair_chars=args.max_pair_chars,
         embedding_model=args.embedding_model,
+        embedding_batch_size=args.embedding_batch_size,
         random_seed=42,
     )
 
@@ -254,18 +317,25 @@ def run_repository(
     k_values: tuple[int, ...],
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, int]]:
     ai_config = parse_ai_config(load_ai_config(repo_dir / "repo.yml"))
-    code_dir = repo_dir / "code"
-    files = load_repository_files(code_dir, repository_id, revision)
+    files = load_repository_files(resolve_code_dir(repo_dir), repository_id, revision)
     selected_files = filter_files_by_config(files, ai_config)
-    chunks = build_chunks(selected_files, ai_config)
-    metadata = {chunk.id: extract_structural_metadata(chunk) for chunk in chunks}
-    embeddings = embed_chunks(
-        chunks,
-        metadata,
-        model_name=embedding_model,
-        batch_size=embedding_batch_size,
-    )
     issues = load_issues(repo_dir / "issues.jsonl", repository_id)
+
+    retriever: Retriever
+    if config.use_two_stage:
+        retriever = TwoStageRetriever(
+            files=selected_files,
+            config=config,
+            ai_config=ai_config,
+            reranker_model=reranker_model,
+        )
+    else:
+        retriever = FlatRetriever(
+            files=selected_files,
+            config=config,
+            ai_config=ai_config,
+            reranker_model=reranker_model,
+        )
 
     per_issue_results: list[dict[str, Any]] = []
     issue_metrics: list[dict[str, Any]] = []
@@ -276,16 +346,10 @@ def run_repository(
             model_name=embedding_model,
             batch_size=embedding_batch_size,
         )
-        evidence = run_retrieval_core(
-            issue=issue,
-            chunks=chunks,
-            metadata_by_chunk_id=metadata,
-            config=config,
-            embeddings=embeddings,
-            query_vector=query_vector,
-            reranker_model=reranker_model,
-        )
+        retrieval = retriever.retrieve(issue, query_vector)
         latency = perf_counter() - started
+
+        evidence = retrieval.evidence
         top_k = [evidence_chunk_to_dict(chunk) for chunk in evidence.evidence_chunks]
         metrics = compute_file_level_metrics(
             top_k=evidence.evidence_chunks,
@@ -293,6 +357,8 @@ def run_repository(
             k_values=k_values,
         )
         metrics["latency_sec"] = latency
+        if config.use_two_stage:
+            metrics.update(compute_document_metrics(retrieval, issue.expected_files))
         issue_metrics.append(metrics)
         per_issue_results.append(
             {
@@ -303,16 +369,118 @@ def run_repository(
                 "latency_sec": latency,
                 "metrics": metrics,
                 "warnings": [warning.model_dump(mode="json") for warning in evidence.warnings],
+                "documents": [
+                    document.model_dump(mode="json") for document in retrieval.documents
+                ],
                 "top_k": top_k,
             }
         )
 
-    return per_issue_results, issue_metrics, {
+    summary = {
         "repositories": 1,
         "issues": len(issues),
         "selected_files": len(selected_files),
-        "chunks": len(chunks),
+        **retriever.summary(),
     }
+    return per_issue_results, issue_metrics, summary
+
+
+def resolve_code_dir(repo_dir: Path) -> Path:
+    """Dataset repos keep sources under ``code/``; larger ones sit at the repo root."""
+    code_dir = repo_dir / "code"
+    return code_dir if code_dir.is_dir() else repo_dir
+
+
+class Retriever:
+    """Per-repository retrieval strategy: index once, answer every issue."""
+
+    def retrieve(self, issue: Issue, query_vector: list[float]) -> IssueRetrieval:
+        raise NotImplementedError
+
+    def summary(self) -> dict[str, int]:
+        raise NotImplementedError
+
+
+class FlatRetriever(Retriever):
+    """AST-chunk the whole repository up front, then retrieve over all chunks."""
+
+    def __init__(
+        self,
+        *,
+        files: list[RepositoryFile],
+        config: ExperimentConfig,
+        ai_config: AIConfig,
+        reranker_model: Any,
+    ) -> None:
+        self.config = config
+        self.reranker_model = reranker_model
+        self.chunks = build_chunks(files, ai_config)
+        self.metadata = {chunk.id: extract_structural_metadata(chunk) for chunk in self.chunks}
+        self.embeddings = embed_chunks(
+            self.chunks,
+            self.metadata,
+            model_name=config.embedding_model,
+            batch_size=config.embedding_batch_size,
+        )
+
+    def retrieve(self, issue: Issue, query_vector: list[float]) -> IssueRetrieval:
+        evidence = run_retrieval_core(
+            issue=issue,
+            chunks=self.chunks,
+            metadata_by_chunk_id=self.metadata,
+            config=self.config,
+            embeddings=self.embeddings,
+            query_vector=query_vector,
+            reranker_model=self.reranker_model,
+        )
+        return IssueRetrieval(evidence=evidence, chunk_count=len(self.chunks))
+
+    def summary(self) -> dict[str, int]:
+        return {"documents": 0, "chunks": len(self.chunks)}
+
+
+class TwoStageRetriever(Retriever):
+    """Rank whole files first, then AST-split and search only the selected ones."""
+
+    def __init__(
+        self,
+        *,
+        files: list[RepositoryFile],
+        config: ExperimentConfig,
+        ai_config: AIConfig,
+        reranker_model: Any,
+    ) -> None:
+        self.config = config
+        self.reranker_model = reranker_model
+        embedder = make_chunk_embedder(config)
+        self.index = build_document_index(files, config, embed_chunks_fn=embedder)
+        self.expander = make_document_expander(
+            self.index,
+            config,
+            chunking=ai_config.chunking,
+            embed_chunks_fn=embedder,
+        )
+
+    def retrieve(self, issue: Issue, query_vector: list[float]) -> IssueRetrieval:
+        result = run_two_stage_retrieval(
+            issue,
+            self.index,
+            self.config,
+            expander=self.expander,
+            query_vector=query_vector,
+            reranker_model=self.reranker_model,
+        )
+        return IssueRetrieval(
+            evidence=result.evidence,
+            documents=result.documents,
+            chunk_count=result.chunk_count,
+        )
+
+    def summary(self) -> dict[str, int]:
+        return {
+            "documents": len(self.index.documents),
+            "chunks": self.expander.cached_chunk_count,
+        }
 
 
 def compute_file_level_metrics(
@@ -332,6 +500,20 @@ def compute_file_level_metrics(
         metrics[f"precision_at_{k}"] = len(hits) / k if k > 0 else 0.0
         metrics[f"map_at_{k}"] = average_precision_at_k(retrieved, expected, k)
     return metrics
+
+
+def compute_document_metrics(
+    retrieval: IssueRetrieval,
+    expected_files: list[str],
+) -> dict[str, float]:
+    """Stage-1 recall: the ceiling the chunk stage can never exceed."""
+    expected = {path for path in expected_files if path}
+    selected = {document.path for document in retrieval.documents}
+    return {
+        "stage1_doc_recall": len(selected & expected) / len(expected) if expected else 0.0,
+        "stage1_documents": float(len(retrieval.documents)),
+        "stage1_chunks": float(retrieval.chunk_count),
+    }
 
 
 def average_precision_at_k(ranked_paths: list[str], expected: set[str], k: int) -> float:
@@ -359,6 +541,12 @@ def aggregate_metrics(issue_metrics: list[dict[str, Any]], k_values: tuple[int, 
         *(f"recall_at_{k}" for k in k_values),
         *(f"precision_at_{k}" for k in k_values),
         *(f"map_at_{k}" for k in k_values),
+    ]
+    stage1_names = ["stage1_doc_recall", "stage1_documents", "stage1_chunks"]
+    metric_names += [
+        name
+        for name in stage1_names
+        if any(name in metrics for metrics in issue_metrics)
     ]
     for name in metric_names:
         values = [float(metrics.get(name, 0.0)) for metrics in issue_metrics]
@@ -439,10 +627,19 @@ def build_run_info(args: argparse.Namespace, started_at: datetime) -> dict[str, 
 
 def build_config_summary(args: argparse.Namespace) -> dict[str, Any]:
     return {
+        "pipeline": args.pipeline,
         "embedding_model": args.embedding_model,
         "reranker_model": args.reranker_model,
         "retrievers": ["bm25", "dense", "ast"],
         "fusion": "rrf",
+        "document_retrievers": (
+            ["bm25", "dense"] + (["ast"] if args.doc_use_ast else [])
+            if args.pipeline == "two_stage"
+            else []
+        ),
+        "doc_top_k": args.doc_top_k if args.pipeline == "two_stage" else None,
+        "doc_bm25_top_k": args.doc_bm25_top_k if args.pipeline == "two_stage" else None,
+        "doc_dense_top_k": args.doc_dense_top_k if args.pipeline == "two_stage" else None,
         "k_values": list(args.k_values),
         "bm25_top_k": args.bm25_top_k,
         "dense_top_k": args.dense_top_k,

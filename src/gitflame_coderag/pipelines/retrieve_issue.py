@@ -8,6 +8,7 @@ vector. DB-backed code should live in a thin wrapper above this module.
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from uuid import uuid4
 
 from gitflame_coderag.embeddings import embed_query
@@ -61,7 +62,7 @@ def run_retrieval_core(
     pipeline pure and testable; DB/experiment wrappers can decide how to embed the
     issue query and which embedding model to use.
     """
-    rankings = _collect_enabled_rankings(
+    rankings = collect_enabled_rankings(
         issue=issue,
         chunks=chunks,
         metadata_by_chunk_id=metadata_by_chunk_id,
@@ -69,7 +70,7 @@ def run_retrieval_core(
         embeddings=embeddings,
         query_vector=query_vector,
     )
-    candidates = _finalize_candidates(
+    candidates = finalize_candidates(
         issue=issue,
         chunks=chunks,
         rankings=rankings,
@@ -129,7 +130,7 @@ def run_retrieval_from_db(
             model_name=config.embedding_model,
         )
 
-    rankings = _collect_enabled_rankings(
+    rankings = collect_enabled_rankings(
         issue=issue,
         chunks=bundle.chunks,
         metadata_by_chunk_id=bundle.metadata,
@@ -137,7 +138,7 @@ def run_retrieval_from_db(
         embeddings=bundle.embeddings,
         query_vector=query_vector,
     )
-    final_results = _finalize_candidates(
+    final_results = finalize_candidates(
         issue=issue,
         chunks=bundle.chunks,
         rankings=rankings,
@@ -195,7 +196,7 @@ def retrieve_issue_evidence(
     return result.evidence_chunks
 
 
-def _collect_enabled_rankings(
+def collect_enabled_rankings(
     *,
     issue: Issue,
     chunks: list[CodeChunk],
@@ -204,6 +205,11 @@ def _collect_enabled_rankings(
     embeddings: list[ChunkEmbedding] | None,
     query_vector: list[float] | None,
 ) -> list[list[RetrievalResult]]:
+    """Run every retriever enabled by ``config`` over ``chunks``.
+
+    Public so the two-stage pipeline can reuse the chunk-level retrieval stage for
+    the chunks it builds from the documents selected in stage 1.
+    """
     rankings: list[list[RetrievalResult]] = []
 
     if config.use_bm25:
@@ -230,7 +236,7 @@ def _collect_enabled_rankings(
     return [ranking for ranking in rankings if ranking]
 
 
-def _combine_rankings(
+def combine_rankings(
     rankings: list[list[RetrievalResult]],
     config: ExperimentConfig,
 ) -> list[RetrievalResult]:
@@ -243,15 +249,24 @@ def _combine_rankings(
     raise ValueError("Multiple retrieval rankings require RRF fusion")
 
 
-def _finalize_candidates(
+def finalize_candidates(
     *,
     issue: Issue,
     chunks: list[CodeChunk],
     rankings: list[list[RetrievalResult]],
     config: ExperimentConfig,
     reranker_model: CrossEncoderLike | None,
+    rescore_fused: Callable[[list[RetrievalResult]], list[RetrievalResult]] | None = None,
 ) -> list[RetrievalResult]:
-    candidates = _combine_rankings(rankings, config)
+    """Fuse the rankings with RRF and rerank them into the final candidate list.
+
+    ``rescore_fused`` runs on the fused candidates before reranking; the two-stage
+    pipeline uses it to fold the document rank back into the chunk scores, which
+    also decides which candidates make it into the reranker pool.
+    """
+    candidates = combine_rankings(rankings, config)
+    if rescore_fused is not None:
+        candidates = rescore_fused(candidates)
     if not (config.use_reranker and candidates):
         return candidates
 

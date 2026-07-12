@@ -1,15 +1,20 @@
 import hashlib
 
-from gitflame_coderag.schemas import AIConfig, CodeChunk, RepositoryFile
+from gitflame_coderag.chunking.ast_grep import get_chunking_config
+from gitflame_coderag.schemas import AIConfig, ChunkingConfig, CodeChunk, RepositoryFile
 
 
-def chunk_file_fallback_window(file: RepositoryFile, config: AIConfig) -> list[CodeChunk]:
+def chunk_file_fallback_window(
+    file: RepositoryFile,
+    config: AIConfig | ChunkingConfig,
+) -> list[CodeChunk]:
     lines = file.raw_content.splitlines()
     if not lines:
         return []
 
-    window = config.chunking.max_chunk_lines
-    overlap = min(config.chunking.overlap_lines, window - 1)
+    chunking = get_chunking_config(config)
+    window = chunking.max_chunk_lines
+    overlap = min(chunking.overlap_lines, window - 1)
     step = window - overlap
     chunks: list[CodeChunk] = []
 
@@ -39,4 +44,3 @@ def chunk_file_fallback_window(file: RepositoryFile, config: AIConfig) -> list[C
         if end_line == len(lines):
             break
     return chunks
-
