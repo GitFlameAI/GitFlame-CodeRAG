@@ -91,12 +91,12 @@ def validate_experiment_inputs(
             add("error", "invalid_config", f"repo.yml could not be parsed: {error}")
 
     # --- code files -------------------------------------------------------
-    code_dir = repo_dir / "code"
+    code_dir = repository_source_root(repo_dir)
     files = []
     selected_paths: set[str] = set()
     all_paths: set[str] = set()
     if not code_dir.is_dir():
-        add("error", "missing_code", "code/ directory not found")
+        add("error", "missing_code", "code/ or src/ directory not found")
     else:
         files = load_repository_files(code_dir, repository_id, revision)
         report.n_code_files = len(files)
@@ -161,10 +161,16 @@ def validate_dataset(
 ) -> list[RepositoryValidation]:
     """Validate every repository under ``dataset_root``.
 
-    A repository is any immediate subdirectory that contains a ``repo.yml``.
+    A repository is any descendant directory that contains a ``repo.yml``.
     """
     dataset_root = Path(dataset_root)
-    repos = sorted(
-        p for p in dataset_root.iterdir() if p.is_dir() and (p / "repo.yml").exists()
-    )
+    repos = sorted(p.parent for p in dataset_root.rglob("repo.yml") if p.parent.is_dir())
     return [validate_experiment_inputs(repo, revision) for repo in repos]
+
+
+def repository_source_root(repo_dir: Path) -> Path:
+    """Return the directory whose relative paths match issue.expected_files."""
+    code_dir = repo_dir / "code"
+    if code_dir.is_dir():
+        return code_dir
+    return repo_dir

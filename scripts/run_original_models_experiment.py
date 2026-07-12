@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Run the full CodeRAG experiment with original models and export one JSON file.
+"""Run the CodeRAG experiment matrix with original models and export one JSON file.
 
 This script is intended for an external teammate who can run the original models locally.
-It does not require Postgres: it indexes the dataset in memory, runs
-BM25 / Dense / AST -> RRF -> reranker, computes file-level metrics from issue.expected_files,
-and writes a single JSON artifact with environment info, smoke tests, metrics, per-issue output,
-and all errors that happened along the way.
+It does not require Postgres: it indexes the dataset in memory, runs the required
+BM25 / Dense / AST / Full RRF / Full RRF + reranker configs, computes file-level
+metrics from issue.expected_files, and writes a single JSON artifact with
+environment info, smoke tests, metrics, per-issue output, latency, and all errors
+that happened along the way.
 """
 
 from __future__ import annotations
@@ -28,14 +29,27 @@ from gitflame_coderag.chunking import build_chunks
 from gitflame_coderag.chunking.ast_grep import extract_structural_metadata
 from gitflame_coderag.config import load_ai_config, parse_ai_config
 from gitflame_coderag.embeddings import embed_chunks, embed_query
-from gitflame_coderag.experiments.validation import validate_dataset
+from gitflame_coderag.experiments.validation import (
+    repository_source_root,
+    validate_experiment_inputs,
+)
 from gitflame_coderag.ingestion import filter_files_by_config, load_issues, load_repository_files
 from gitflame_coderag.pipelines.retrieve_issue import build_issue_query, run_retrieval_core
-from gitflame_coderag.schemas import CodeChunk, EvidenceChunk, ExperimentConfig, Issue
+from gitflame_coderag.schemas import EvidenceChunk, ExperimentConfig
 
 DEFAULT_EMBEDDING_MODEL = "jinaai/jina-embeddings-v2-base-code"
 DEFAULT_RERANKER_MODEL = "cross-encoder/ms-marco-MiniLM-L6-v2"
 DEFAULT_K_VALUES = (5, 10, 15)
+DEFAULT_CONFIG_NAMES = (
+    "bm25_only",
+    "dense_only",
+    "ast_only",
+    "bm25_ast",
+    "bm25_dense",
+    "ast_dense",
+    "full_rrf",
+    "full_rrf_reranker",
+)
 
 
 @dataclass
@@ -57,6 +71,7 @@ def main() -> int:
     result: dict[str, Any] = {
         "run_info": build_run_info(args, started_at),
         "config": build_config_summary(args),
+        "experimental_pipeline": build_experimental_pipeline(args),
         "model_smoke_tests": {},
         "dataset_validation": {},
         "dataset_summary": {},
@@ -67,7 +82,10 @@ def main() -> int:
 
     try:
         dataset_root = args.dataset_root.resolve()
-        validation_reports = validate_dataset(dataset_root, revision=args.revision)
+        repo_dirs = iter_repository_dirs(dataset_root)
+        validation_reports = [
+            validate_experiment_inputs(repo, args.revision) for repo in repo_dirs
+        ]
         result["dataset_validation"] = summarize_validation(validation_reports)
         validation_errors = [
             problem
@@ -87,30 +105,38 @@ def main() -> int:
         errors.append(capture_error("dataset_validation", exc))
         return finish(result, errors, output_path, exit_code=1)
 
+    configs = make_experiment_configs(args)
+    uses_dense = any(config.use_dense for config in configs)
+    uses_reranker = any(config.use_reranker for config in configs)
+
     reranker_model = None
-    try:
-        result["model_smoke_tests"]["embedding"] = smoke_test_embedding(
-            args.embedding_model,
-            batch_size=args.embedding_batch_size,
-        )
-    except Exception as exc:  # noqa: BLE001
-        errors.append(capture_error("embedding_smoke_test", exc))
-        result["model_smoke_tests"]["embedding"] = failed_smoke(exc)
-        return finish(result, errors, output_path, exit_code=1)
+    if uses_dense:
+        try:
+            result["model_smoke_tests"]["embedding"] = smoke_test_embedding(
+                args.embedding_model,
+                batch_size=args.embedding_batch_size,
+            )
+        except Exception as exc:  # noqa: BLE001
+            errors.append(capture_error("embedding_smoke_test", exc))
+            result["model_smoke_tests"]["embedding"] = failed_smoke(exc)
+            return finish(result, errors, output_path, exit_code=1)
+    else:
+        result["model_smoke_tests"]["embedding"] = {"ok": True, "skipped": True}
 
-    try:
-        reranker_model, reranker_smoke = smoke_test_reranker(
-            args.reranker_model,
-            device=args.reranker_device,
-        )
-        result["model_smoke_tests"]["reranker"] = reranker_smoke
-    except Exception as exc:  # noqa: BLE001
-        errors.append(capture_error("reranker_smoke_test", exc))
-        result["model_smoke_tests"]["reranker"] = failed_smoke(exc)
-        return finish(result, errors, output_path, exit_code=1)
-
-    config = make_experiment_config(args)
-    all_issue_metrics: list[dict[str, Any]] = []
+    if uses_reranker:
+        try:
+            reranker_model, reranker_smoke = smoke_test_reranker(
+                args.reranker_model,
+                device=args.reranker_device,
+            )
+            result["model_smoke_tests"]["reranker"] = reranker_smoke
+        except Exception as exc:  # noqa: BLE001
+            errors.append(capture_error("reranker_smoke_test", exc))
+            result["model_smoke_tests"]["reranker"] = failed_smoke(exc)
+            return finish(result, errors, output_path, exit_code=1)
+    else:
+        result["model_smoke_tests"]["reranker"] = {"ok": True, "skipped": True}
+    all_issue_metrics: dict[str, list[dict[str, Any]]] = {config.name: [] for config in configs}
     dataset_summary = {
         "repositories": 0,
         "issues": 0,
@@ -118,40 +144,45 @@ def main() -> int:
         "chunks": 0,
     }
 
-    for repo_dir in iter_repository_dirs(args.dataset_root):
+    for repo_dir in repo_dirs:
         repository_id = repo_dir.name
         try:
-            repo_result, repo_metrics, repo_summary = run_repository(
+            repo_result, repo_metrics, repo_summary = run_repository_configs(
                 repo_dir=repo_dir,
                 repository_id=repository_id,
                 revision=args.revision,
-                config=config,
+                configs=configs,
                 embedding_model=args.embedding_model,
                 embedding_batch_size=args.embedding_batch_size,
                 reranker_model=reranker_model,
                 k_values=args.k_values,
             )
             result["per_issue_results"].extend(repo_result)
-            all_issue_metrics.extend(repo_metrics)
+            for config_name, metrics in repo_metrics.items():
+                all_issue_metrics[config_name].extend(metrics)
             for key, value in repo_summary.items():
                 dataset_summary[key] = dataset_summary.get(key, 0) + value
         except Exception as exc:  # noqa: BLE001
             errors.append(capture_error("repository_run", exc, repository_id=repository_id))
             if args.fail_fast:
                 result["dataset_summary"] = dataset_summary
-                result["metrics"] = aggregate_metrics(all_issue_metrics, args.k_values)
+                result["metrics"] = aggregate_metrics_by_config(all_issue_metrics, args.k_values)
                 return finish(result, errors, output_path, exit_code=1)
 
     result["dataset_summary"] = dataset_summary
-    result["metrics"] = aggregate_metrics(all_issue_metrics, args.k_values)
+    result["metrics"] = aggregate_metrics_by_config(all_issue_metrics, args.k_values)
     exit_code = 1 if errors else 0
     return finish(result, errors, output_path, exit_code=exit_code)
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--dataset-root", type=Path, default=Path("datasets/repositories"))
-    parser.add_argument("--output", type=Path, default=Path("results/original_models_experiment_results.json"))
+    parser.add_argument("--dataset-root", type=Path, default=Path("datasets"))
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=Path("results/original_models_experiment_results.json"),
+    )
     parser.add_argument("--revision", default="local")
     parser.add_argument("--embedding-model", default=DEFAULT_EMBEDDING_MODEL)
     parser.add_argument("--reranker-model", default=DEFAULT_RERANKER_MODEL)
@@ -165,6 +196,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--rrf-top-k", type=int, default=50)
     parser.add_argument("--reranker-top-k", type=int, default=50)
     parser.add_argument("--k-values", type=parse_k_values, default=DEFAULT_K_VALUES)
+    parser.add_argument(
+        "--configs",
+        type=parse_config_names,
+        default=DEFAULT_CONFIG_NAMES,
+        help=(
+            "Comma-separated config names: "
+            "bm25_only,dense_only,ast_only,bm25_ast,bm25_dense,ast_dense,"
+            "full_rrf,full_rrf_reranker"
+        ),
+    )
     parser.add_argument("--max-pair-chars", type=int, default=2000)
     parser.add_argument("--fail-fast", action="store_true")
     return parser.parse_args()
@@ -177,30 +218,101 @@ def parse_k_values(raw: str) -> tuple[int, ...]:
     return values
 
 
-def make_experiment_config(args: argparse.Namespace) -> ExperimentConfig:
+def parse_config_names(raw: str) -> tuple[str, ...]:
+    values = tuple(part.strip() for part in raw.split(",") if part.strip())
+    unknown = sorted(set(values) - set(DEFAULT_CONFIG_NAMES))
+    if unknown:
+        raise argparse.ArgumentTypeError(f"unknown configs: {', '.join(unknown)}")
+    if not values:
+        raise argparse.ArgumentTypeError("configs must not be empty")
+    return values
+
+
+def make_experiment_configs(args: argparse.Namespace) -> list[ExperimentConfig]:
+    return [make_experiment_config(args, name) for name in args.configs]
+
+
+def make_experiment_config(args: argparse.Namespace, name: str) -> ExperimentConfig:
     final_top_k = max(args.k_values)
     reranker_top_k = max(args.reranker_top_k, final_top_k)
     rrf_top_k = max(args.rrf_top_k, reranker_top_k)
+    base: dict[str, Any] = {
+        "name": name,
+        "bm25_top_k": args.bm25_top_k,
+        "dense_top_k": args.dense_top_k,
+        "ast_top_k": args.ast_top_k,
+        "rrf_k": args.rrf_k,
+        "rrf_top_k": rrf_top_k,
+        "reranker_model": args.reranker_model,
+        "reranker_top_k": reranker_top_k,
+        "final_top_k": final_top_k,
+        "reranker_device": args.reranker_device,
+        "reranker_batch_size": args.reranker_batch_size,
+        "reranker_max_pair_chars": args.max_pair_chars,
+        "embedding_model": args.embedding_model,
+        "random_seed": 42,
+    }
+    config_flags = {
+        "bm25_only": dict(
+            use_bm25=True,
+            use_dense=False,
+            use_ast=False,
+            use_rrf=False,
+            use_reranker=False,
+        ),
+        "dense_only": dict(
+            use_bm25=False,
+            use_dense=True,
+            use_ast=False,
+            use_rrf=False,
+            use_reranker=False,
+        ),
+        "ast_only": dict(
+            use_bm25=False,
+            use_dense=False,
+            use_ast=True,
+            use_rrf=False,
+            use_reranker=False,
+        ),
+        "bm25_ast": dict(
+            use_bm25=True,
+            use_dense=False,
+            use_ast=True,
+            use_rrf=True,
+            use_reranker=False,
+        ),
+        "bm25_dense": dict(
+            use_bm25=True,
+            use_dense=True,
+            use_ast=False,
+            use_rrf=True,
+            use_reranker=False,
+        ),
+        "ast_dense": dict(
+            use_bm25=False,
+            use_dense=True,
+            use_ast=True,
+            use_rrf=True,
+            use_reranker=False,
+        ),
+        "full_rrf": dict(
+            use_bm25=True,
+            use_dense=True,
+            use_ast=True,
+            use_rrf=True,
+            use_reranker=False,
+        ),
+        "full_rrf_reranker": dict(
+            use_bm25=True,
+            use_dense=True,
+            use_ast=True,
+            use_rrf=True,
+            use_reranker=True,
+        ),
+    }
     return ExperimentConfig(
-        name="original_models_full_rrf_reranker",
-        use_bm25=True,
-        use_dense=True,
-        use_ast=True,
-        use_rrf=True,
-        use_reranker=True,
-        bm25_top_k=args.bm25_top_k,
-        dense_top_k=args.dense_top_k,
-        ast_top_k=args.ast_top_k,
-        rrf_k=args.rrf_k,
-        rrf_top_k=rrf_top_k,
-        reranker_model=args.reranker_model,
-        reranker_top_k=reranker_top_k,
-        final_top_k=final_top_k,
-        reranker_device=args.reranker_device,
-        reranker_batch_size=args.reranker_batch_size,
-        reranker_max_pair_chars=args.max_pair_chars,
-        embedding_model=args.embedding_model,
-        random_seed=42,
+        **base,
+        **config_flags[name],
     )
 
 
@@ -228,7 +340,12 @@ def smoke_test_reranker(model_name: str, *, device: str) -> tuple[Any, dict[str,
     load_latency = perf_counter() - started
 
     query = "Fix password reset token validation bug"
-    chunk = "def validate_reset_token(token):\n    if token.is_expired():\n        raise InvalidTokenError()\n    return token.user_id"
+    chunk = (
+        "def validate_reset_token(token):\n"
+        "    if token.is_expired():\n"
+        "        raise InvalidTokenError()\n"
+        "    return token.user_id"
+    )
     predict_started = perf_counter()
     score = model.predict([(query, chunk)], batch_size=1, show_progress_bar=False)
     predict_latency = perf_counter() - predict_started
@@ -242,70 +359,86 @@ def smoke_test_reranker(model_name: str, *, device: str) -> tuple[Any, dict[str,
     }
 
 
-def run_repository(
+def run_repository_configs(
     *,
     repo_dir: Path,
     repository_id: str,
     revision: str,
-    config: ExperimentConfig,
+    configs: list[ExperimentConfig],
     embedding_model: str,
     embedding_batch_size: int,
     reranker_model: Any,
     k_values: tuple[int, ...],
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, int]]:
+) -> tuple[list[dict[str, Any]], dict[str, list[dict[str, Any]]], dict[str, int]]:
     ai_config = parse_ai_config(load_ai_config(repo_dir / "repo.yml"))
-    code_dir = repo_dir / "code"
-    files = load_repository_files(code_dir, repository_id, revision)
+    code_root = repository_source_root(repo_dir)
+    files = load_repository_files(code_root, repository_id, revision)
     selected_files = filter_files_by_config(files, ai_config)
     chunks = build_chunks(selected_files, ai_config)
     metadata = {chunk.id: extract_structural_metadata(chunk) for chunk in chunks}
-    embeddings = embed_chunks(
-        chunks,
-        metadata,
-        model_name=embedding_model,
-        batch_size=embedding_batch_size,
-    )
-    issues = load_issues(repo_dir / "issues.jsonl", repository_id)
-
-    per_issue_results: list[dict[str, Any]] = []
-    issue_metrics: list[dict[str, Any]] = []
-    for issue in issues:
-        started = perf_counter()
-        query_vector = embed_query(
-            build_issue_query(issue),
+    embeddings = None
+    if any(config.use_dense for config in configs):
+        embeddings = embed_chunks(
+            chunks,
+            metadata,
             model_name=embedding_model,
             batch_size=embedding_batch_size,
         )
-        evidence = run_retrieval_core(
-            issue=issue,
-            chunks=chunks,
-            metadata_by_chunk_id=metadata,
-            config=config,
-            embeddings=embeddings,
-            query_vector=query_vector,
-            reranker_model=reranker_model,
-        )
-        latency = perf_counter() - started
-        top_k = [evidence_chunk_to_dict(chunk) for chunk in evidence.evidence_chunks]
-        metrics = compute_file_level_metrics(
-            top_k=evidence.evidence_chunks,
-            expected_files=issue.expected_files,
-            k_values=k_values,
-        )
-        metrics["latency_sec"] = latency
-        issue_metrics.append(metrics)
-        per_issue_results.append(
-            {
-                "repository_id": repository_id,
-                "issue_id": issue.id,
-                "title": issue.title,
-                "expected_files": issue.expected_files,
-                "latency_sec": latency,
-                "metrics": metrics,
-                "warnings": [warning.model_dump(mode="json") for warning in evidence.warnings],
-                "top_k": top_k,
-            }
-        )
+    issues = load_issues(repo_dir / "issues.jsonl", repository_id)
+
+    per_issue_results: list[dict[str, Any]] = []
+    issue_metrics: dict[str, list[dict[str, Any]]] = {config.name: [] for config in configs}
+    for issue in issues:
+        query_vector: list[float] | None = None
+        query_embedding_latency = 0.0
+        if any(config.use_dense for config in configs):
+            query_embedding_started = perf_counter()
+            query_vector = embed_query(
+                build_issue_query(issue),
+                model_name=embedding_model,
+                batch_size=embedding_batch_size,
+            )
+            query_embedding_latency = perf_counter() - query_embedding_started
+        for config in configs:
+            started = perf_counter()
+            evidence = run_retrieval_core(
+                issue=issue,
+                chunks=chunks,
+                metadata_by_chunk_id=metadata,
+                config=config,
+                embeddings=embeddings,
+                query_vector=query_vector if config.use_dense else None,
+                reranker_model=reranker_model if config.use_reranker else None,
+            )
+            retrieval_latency = perf_counter() - started
+            latency = retrieval_latency
+            if config.use_dense:
+                latency += query_embedding_latency
+            top_k = [evidence_chunk_to_dict(chunk) for chunk in evidence.evidence_chunks]
+            metrics = compute_file_level_metrics(
+                top_k=evidence.evidence_chunks,
+                expected_files=issue.expected_files,
+                k_values=k_values,
+            )
+            metrics["latency_sec"] = latency
+            issue_metrics[config.name].append(metrics)
+            per_issue_results.append(
+                {
+                    "config_name": config.name,
+                    "repository_id": repository_id,
+                    "issue_id": issue.id,
+                    "title": issue.title,
+                    "expected_files": issue.expected_files,
+                    "latency_sec": latency,
+                    "retrieval_latency_sec": retrieval_latency,
+                    "query_embedding_latency_sec": (
+                        query_embedding_latency if config.use_dense else 0.0
+                    ),
+                    "metrics": metrics,
+                    "warnings": [warning.model_dump(mode="json") for warning in evidence.warnings],
+                    "top_k": top_k,
+                }
+            )
 
     return per_issue_results, issue_metrics, {
         "repositories": 1,
@@ -328,7 +461,9 @@ def compute_file_level_metrics(
         retrieved = ranked_paths[:k]
         retrieved_set = set(retrieved)
         hits = [path for path in retrieved if path in expected]
-        metrics[f"recall_at_{k}"] = len(retrieved_set & expected) / len(expected) if expected else 0.0
+        metrics[f"recall_at_{k}"] = (
+            len(retrieved_set & expected) / len(expected) if expected else 0.0
+        )
         metrics[f"precision_at_{k}"] = len(hits) / k if k > 0 else 0.0
         metrics[f"map_at_{k}"] = average_precision_at_k(retrieved, expected, k)
     return metrics
@@ -351,7 +486,10 @@ def average_precision_at_k(ranked_paths: list[str], expected: set[str], k: int) 
     return precision_sum / min(len(expected), k)
 
 
-def aggregate_metrics(issue_metrics: list[dict[str, Any]], k_values: tuple[int, ...]) -> dict[str, Any]:
+def aggregate_metrics(
+    issue_metrics: list[dict[str, Any]],
+    k_values: tuple[int, ...],
+) -> dict[str, Any]:
     if not issue_metrics:
         return {"n_issues": 0}
     output: dict[str, Any] = {"n_issues": len(issue_metrics)}
@@ -370,6 +508,16 @@ def aggregate_metrics(issue_metrics: list[dict[str, Any]], k_values: tuple[int, 
     output["latency_p95_sec"] = percentile(latencies, 0.95)
     output["latency_max_sec"] = max(latencies)
     return output
+
+
+def aggregate_metrics_by_config(
+    issue_metrics_by_config: dict[str, list[dict[str, Any]]],
+    k_values: tuple[int, ...],
+) -> dict[str, Any]:
+    return {
+        config_name: aggregate_metrics(issue_metrics, k_values)
+        for config_name, issue_metrics in issue_metrics_by_config.items()
+    }
 
 
 def percentile(values: list[float], q: float) -> float:
@@ -396,13 +544,15 @@ def evidence_chunk_to_dict(chunk: EvidenceChunk) -> dict[str, Any]:
 
 
 def iter_repository_dirs(dataset_root: Path) -> list[Path]:
-    return sorted(path for path in dataset_root.iterdir() if path.is_dir() and (path / "repo.yml").exists())
+    return sorted(path.parent for path in dataset_root.rglob("repo.yml") if path.parent.is_dir())
 
 
 def summarize_validation(reports: list[Any]) -> dict[str, Any]:
     problems = [problem for report in reports for problem in report.problems]
     return {
-        "status": "ok" if not any(problem.severity == "error" for problem in problems) else "failed",
+        "status": (
+            "ok" if not any(problem.severity == "error" for problem in problems) else "failed"
+        ),
         "repositories": len(reports),
         "errors": sum(1 for problem in problems if problem.severity == "error"),
         "warnings": sum(1 for problem in problems if problem.severity == "warning"),
@@ -441,8 +591,10 @@ def build_config_summary(args: argparse.Namespace) -> dict[str, Any]:
     return {
         "embedding_model": args.embedding_model,
         "reranker_model": args.reranker_model,
-        "retrievers": ["bm25", "dense", "ast"],
-        "fusion": "rrf",
+        "configs": list(args.configs),
+        "experiment_configs": [
+            config.model_dump(mode="json") for config in make_experiment_configs(args)
+        ],
         "k_values": list(args.k_values),
         "bm25_top_k": args.bm25_top_k,
         "dense_top_k": args.dense_top_k,
@@ -454,6 +606,101 @@ def build_config_summary(args: argparse.Namespace) -> dict[str, Any]:
         "reranker_batch_size": args.reranker_batch_size,
         "reranker_device": args.reranker_device,
         "max_pair_chars": args.max_pair_chars,
+    }
+
+
+def build_experimental_pipeline(args: argparse.Namespace) -> dict[str, Any]:
+    return {
+        "configs_run": [
+            {
+                "name": "bm25_only",
+                "pipeline": "BM25 -> top-k evidence",
+                "enabled": "bm25_only" in args.configs,
+            },
+            {
+                "name": "dense_only",
+                "pipeline": "Dense vector retrieval -> top-k evidence",
+                "enabled": "dense_only" in args.configs,
+            },
+            {
+                "name": "ast_only",
+                "pipeline": "AST/symbol candidate retrieval -> top-k evidence",
+                "enabled": "ast_only" in args.configs,
+            },
+            {
+                "name": "bm25_ast",
+                "pipeline": (
+                    "BM25 + AST/symbol candidate retrieval -> reciprocal rank fusion -> "
+                    "top-k evidence"
+                ),
+                "enabled": "bm25_ast" in args.configs,
+            },
+            {
+                "name": "bm25_dense",
+                "pipeline": (
+                    "BM25 + Dense vector retrieval -> reciprocal rank fusion -> "
+                    "top-k evidence"
+                ),
+                "enabled": "bm25_dense" in args.configs,
+            },
+            {
+                "name": "ast_dense",
+                "pipeline": (
+                    "AST/symbol candidate retrieval + Dense vector retrieval -> "
+                    "reciprocal rank fusion -> top-k evidence"
+                ),
+                "enabled": "ast_dense" in args.configs,
+            },
+            {
+                "name": "full_rrf",
+                "pipeline": (
+                    "BM25 + Dense + AST -> reciprocal rank fusion -> top-k evidence"
+                ),
+                "enabled": "full_rrf" in args.configs,
+            },
+            {
+                "name": "full_rrf_reranker",
+                "pipeline": (
+                    "BM25 + Dense + AST -> reciprocal rank fusion -> "
+                    "cross-encoder reranker -> top-k evidence"
+                ),
+                "enabled": "full_rrf_reranker" in args.configs,
+            },
+        ],
+        "metrics": ["recall_at_k", "precision_at_k", "map_at_k", "latency_sec"],
+        "k_values": list(args.k_values),
+        "candidate_k": {
+            "bm25_top_k": args.bm25_top_k,
+            "dense_top_k": args.dense_top_k,
+            "ast_top_k": args.ast_top_k,
+            "rrf_k": args.rrf_k,
+            "rrf_top_k": args.rrf_top_k,
+            "reranker_top_k": args.reranker_top_k,
+            "final_top_k": max(args.k_values),
+        },
+        "relevance": {
+            "level": "file",
+            "source": "issue.expected_files",
+            "rule": (
+                "An evidence chunk is relevant when its repository-relative path "
+                "is listed in expected_files."
+            ),
+            "deduplication": (
+                "Recall uses unique retrieved paths; MAP ignores repeated paths "
+                "after the first hit."
+            ),
+        },
+        "aggregation": {
+            "per_issue": "Metrics are computed independently for each issue/config pair.",
+            "overall": (
+                "Metrics are macro-averaged across all issue/config pairs for "
+                "each config."
+            ),
+            "latency": (
+                "Per-issue retrieval latency is measured after any per-repository "
+                "indexing and embedding precomputation."
+            ),
+        },
     }
 
 
