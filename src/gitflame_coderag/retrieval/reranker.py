@@ -46,28 +46,57 @@ class CrossEncoderLike(Protocol):
 _MODEL_CACHE: dict[tuple[str, str], CrossEncoderLike | None] = {}
 
 
+def _resolve_device(device: str) -> str:
+    """Downgrade a GPU device request to ``"cpu"`` when no GPU is actually usable."""
+    if device == "cpu":
+        return device
+    try:
+        import torch
+
+        if not torch.cuda.is_available():
+            return "cpu"
+    except Exception:
+        # No torch, or a broken install: cannot use a GPU either way.
+        return "cpu"
+    return device
+
+
 def load_reranker_model(
     model_name: str = DEFAULT_RERANKER_MODEL,
     device: str = DEFAULT_DEVICE,
 ) -> CrossEncoderLike | None:
     """Load a cross-encoder reranker, returning ``None`` when unavailable.
 
-    Any failure (missing ``sentence-transformers``, no network, missing weights)
-    is swallowed and surfaced as ``None`` so callers can fall back to RRF order.
+    A GPU ``device`` (e.g. ``"cuda"``) is downgraded to ``"cpu"`` up front when no
+    GPU is available, and the load is retried on ``"cpu"`` if it still fails on the
+    requested device (e.g. an out-of-memory or driver error). Any other failure
+    (missing ``sentence-transformers``, no network, missing weights) is swallowed
+    and surfaced as ``None`` so callers can fall back to RRF order.
     """
     cache_key = (model_name, device)
     if cache_key in _MODEL_CACHE:
         return _MODEL_CACHE[cache_key]
 
+    resolved_device = _resolve_device(device)
+
     model: CrossEncoderLike | None
     try:
         from sentence_transformers import CrossEncoder
 
-        model = CrossEncoder(model_name, device=device)
+        model = CrossEncoder(model_name, device=resolved_device)
     except Exception:
-        # Broad on purpose: import errors, download failures and backend errors
-        # all mean "no reranker available" and must trigger the fallback path.
-        model = None
+        if resolved_device != "cpu":
+            try:
+                from sentence_transformers import CrossEncoder
+
+                model = CrossEncoder(model_name, device="cpu")
+            except Exception:
+                model = None
+        else:
+            # Broad on purpose: import errors, download failures and backend
+            # errors all mean "no reranker available" and must trigger the
+            # fallback path.
+            model = None
 
     _MODEL_CACHE[cache_key] = model
     return model

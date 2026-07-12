@@ -1,3 +1,5 @@
+import sys
+import types
 from collections.abc import Sequence
 from typing import Any
 
@@ -8,6 +10,7 @@ from gitflame_coderag.retrieval.reranker import (
     RerankerCase,
     build_reranker_input,
     compare_rrf_vs_reranker,
+    load_reranker_model,
     rerank_candidates,
     reranker_fallback,
     score_query_chunk_pair,
@@ -167,6 +170,87 @@ def test_rerank_candidates_falls_back_when_model_unavailable(
     assert [r.chunk_id for r in result] == ["c1", "c2"]
     assert all(r.source == "rrf" for r in result)
     assert all(r.reranker_score is None for r in result)
+
+
+def test_resolve_device_downgrades_to_cpu_when_cuda_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_torch = types.SimpleNamespace(cuda=types.SimpleNamespace(is_available=lambda: False))
+    monkeypatch.setitem(sys.modules, "torch", fake_torch)
+
+    assert reranker._resolve_device("cuda") == "cpu"
+    assert reranker._resolve_device("cpu") == "cpu"
+
+
+def test_resolve_device_keeps_gpu_when_cuda_available(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_torch = types.SimpleNamespace(cuda=types.SimpleNamespace(is_available=lambda: True))
+    monkeypatch.setitem(sys.modules, "torch", fake_torch)
+
+    assert reranker._resolve_device("cuda") == "cuda"
+
+
+def test_load_reranker_model_falls_back_to_cpu_when_gpu_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(reranker, "_MODEL_CACHE", {})
+    monkeypatch.setattr(reranker, "_resolve_device", lambda device: "cpu")
+
+    seen_devices: list[str] = []
+
+    class FakeCrossEncoder:
+        def __init__(self, model_name: str, device: str) -> None:
+            seen_devices.append(device)
+
+    fake_module = types.SimpleNamespace(CrossEncoder=FakeCrossEncoder)
+    monkeypatch.setitem(sys.modules, "sentence_transformers", fake_module)
+
+    model = load_reranker_model("some-model", device="cuda")
+
+    assert isinstance(model, FakeCrossEncoder)
+    assert seen_devices == ["cpu"]
+
+
+def test_load_reranker_model_retries_on_cpu_when_gpu_load_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(reranker, "_MODEL_CACHE", {})
+    monkeypatch.setattr(reranker, "_resolve_device", lambda device: device)
+
+    seen_devices: list[str] = []
+
+    class FakeCrossEncoder:
+        def __init__(self, model_name: str, device: str) -> None:
+            seen_devices.append(device)
+            if device == "cuda":
+                raise RuntimeError("CUDA driver initialization failed")
+
+    fake_module = types.SimpleNamespace(CrossEncoder=FakeCrossEncoder)
+    monkeypatch.setitem(sys.modules, "sentence_transformers", fake_module)
+
+    model = load_reranker_model("some-model", device="cuda")
+
+    assert isinstance(model, FakeCrossEncoder)
+    assert seen_devices == ["cuda", "cpu"]
+
+
+def test_load_reranker_model_returns_none_when_cpu_also_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(reranker, "_MODEL_CACHE", {})
+    monkeypatch.setattr(reranker, "_resolve_device", lambda device: device)
+
+    class FakeCrossEncoder:
+        def __init__(self, model_name: str, device: str) -> None:
+            raise RuntimeError("no weights available offline")
+
+    fake_module = types.SimpleNamespace(CrossEncoder=FakeCrossEncoder)
+    monkeypatch.setitem(sys.modules, "sentence_transformers", fake_module)
+
+    model = load_reranker_model("some-model", device="cuda")
+
+    assert model is None
 
 
 def test_score_query_chunk_pair() -> None:

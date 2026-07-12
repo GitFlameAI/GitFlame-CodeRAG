@@ -1,7 +1,8 @@
 # Dataset Layout
 
-Sprint 1 ships **12 synthetic sample repositories** under
-`datasets/repositories/<repository_id>/`:
+This ships **15 synthetic sample repositories** under
+`datasets/repositories/<repository_id>/`, plus larger scale-test fixtures
+under `datasets/medium_repositories/` and `datasets/large_repositories/`.
 
 ```text
 repo_001_fastapi_blog/
@@ -20,7 +21,7 @@ Each issue line in `issues.jsonl` contains `id`, `title`, `body`, `labels` and
 All code is original/synthetic and license-safe to commit; issues are marked
 `source: synthetic` in each `repo.yml`.
 
-## Repositories
+## Repositories (small, hand/LLM-authored)
 
 | id | name | languages |
 |---|---|---|
@@ -36,8 +37,36 @@ All code is original/synthetic and license-safe to commit; issues are marked
 | repo_010_rust_cli_tool | rust-cli-linecount | rust |
 | repo_011_python_etl_pipeline | python-etl-pipeline | python |
 | repo_012_node_ts_graphql | node-ts-graphql-books | typescript |
+| repo_013_python_lru_cache | python-lru-cache | python |
+| repo_014_python_task_queue | python-task-queue | python |
+| repo_015_python_state_machine | python-state-machine | python |
 
-84 issues and 74 code files in total.
+105 issues and 86 code files in total. Each repository has realistic,
+distinct code (own domain, own bugs) plus real test files, so this group is
+the one to use for retrieval-**quality** evaluation (recall@k, MRR, NDCG).
+
+## Medium/large repositories (scale fixtures)
+
+`datasets/medium_repositories/` (5 repos, 100 files each) and
+`datasets/large_repositories/` (2 repos, 1000 files each) are mechanically
+generated: every file is built from the same 15 rotating function templates
+(`build_billing_N`, `resolve_catalog_N`, ...) with only a numeric suffix and
+a `threshold` value changing. As a result:
+
+- All 5 medium repos are byte-identical to each other (only the repo name
+  and issue ids differ); both large repos are byte-identical to each other
+  too. There are really only 2 unique fixtures here, each copy-pasted to hit
+  a target repo count.
+- The 7 issues per repo are also the same templated text, just re-ided.
+- There are no cross-file imports, so AST/import-based candidate retrieval
+  isn't exercised.
+
+Use these only for scale/throughput testing (ingestion speed, index size,
+retrieval latency at volume) — not as a signal for retrieval quality, since
+near-identical function bodies make dense embeddings hard to tell apart.
+See `datasets/dataset_overview.csv` for per-repo file/chunk/issue counts
+(the `chunks` figures there are a formulaic projection, not a measured count
+from the AST-aware chunker).
 
 ## Loading in code
 

@@ -5,6 +5,7 @@ description = "Hybrid code retrieval for GitFlame issue-to-plan and issue-to-cod
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "ast-grep-py>=0.44.1",
     "numpy>=2.0",
     "pgvector>=0.3",
     "psycopg[binary]>=3.2",
