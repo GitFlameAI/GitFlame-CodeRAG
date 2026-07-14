@@ -30,7 +30,6 @@ The project combines lexical, dense and structural code retrieval:
 | `datasets/` | Prepared benchmark repositories, issues and dataset overview. See `datasets/README.md`. |
 | `experiments/` | Final experiment summary, metrics and statistical interpretation. |
 | `migrations/` | SQL migrations for PostgreSQL and pgvector tables. |
-| `reports/` | Final report sources and generated PDF. |
 | `scripts/` | Dataset collection, embedding cache and experiment runner scripts. |
 | `tests/` | Unit and integration tests. |
 | `data_contracts.md` | Shared contracts for functions, stored entities and invariants. |
