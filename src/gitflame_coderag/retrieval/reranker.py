@@ -24,10 +24,19 @@ from typing import Any, Protocol
 
 from gitflame_coderag.schemas import CodeChunk, RetrievalResult
 
-DEFAULT_RERANKER_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+# ms-marco-MiniLM used to be the default and cost more than it earned: its window is 512 tokens,
+# and an issue query plus one AST chunk of Java overran it for 78% of the chunks on elasticsearch,
+# so the cross-encoder judged relevance from a truncated method signature and reordered RRF into
+# noise (recall@10 0.78 -> 0.58). This model's window is 8192, which fits every chunk we measured
+# whole. It is a plain sequence-classification XLM-R, so it loads through CrossEncoder unchanged.
+DEFAULT_RERANKER_MODEL = "BAAI/bge-reranker-v2-m3"
 DEFAULT_DEVICE = "cpu"
-DEFAULT_BATCH_SIZE = 32
-DEFAULT_MAX_PAIR_CHARS = 2000
+# 16 beat 32 on a 8 GiB RTX 4060 for a 50-pair pool: 7.4s vs 9.0s and 3.2 GiB vs 4.2 GiB peak.
+# The larger batch pads every sequence to the longest chunk in it, and this model is 568M.
+DEFAULT_BATCH_SIZE = 16
+# Wide enough that the model's token window, not this character cut, is what truncates a chunk:
+# the longest elasticsearch chunk we measured is 6911 characters.
+DEFAULT_MAX_PAIR_CHARS = 8000
 
 
 class CrossEncoderLike(Protocol):

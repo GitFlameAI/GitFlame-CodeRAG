@@ -17,3 +17,5 @@ artifacts/
 models/
 results/
 datasets/big_repo/
+improvement_history.md
+cache/

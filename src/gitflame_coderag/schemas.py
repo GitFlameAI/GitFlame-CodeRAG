@@ -81,12 +81,12 @@ class RerankerConfig(ContractModel):
     """
 
     enabled: bool = True
-    model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    model: str = "BAAI/bge-reranker-v2-m3"
     device: str = "cpu"
-    batch_size: int = Field(default=32, ge=1)
+    batch_size: int = Field(default=16, ge=1)
     reranker_top_k: int = Field(default=50, ge=1)
     final_top_k: int = Field(default=10, ge=1)
-    max_pair_chars: int = Field(default=2000, ge=1)
+    max_pair_chars: int = Field(default=8000, ge=1)
 
 
 class ExperimentConfig(ContractModel):
@@ -112,12 +112,12 @@ class ExperimentConfig(ContractModel):
     rrf_k: int = Field(default=60, ge=0)
     rrf_top_k: int = Field(default=50, ge=1)
 
-    reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    reranker_model: str = "BAAI/bge-reranker-v2-m3"
     reranker_top_k: int = Field(default=50, ge=1)
     final_top_k: int = Field(default=10, ge=1)
     reranker_device: str = "cpu"
-    reranker_batch_size: int = Field(default=32, ge=1)
-    reranker_max_pair_chars: int = Field(default=2000, ge=1)
+    reranker_batch_size: int = Field(default=16, ge=1)
+    reranker_max_pair_chars: int = Field(default=8000, ge=1)
 
     embedding_model: str = "jinaai/jina-embeddings-v2-base-code"
     random_seed: int = 42

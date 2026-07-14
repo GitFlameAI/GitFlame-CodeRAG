@@ -120,12 +120,12 @@ ExperimentConfig(
     ast_top_k: int = 50,
     rrf_k: int = 60,
     rrf_top_k: int = 50,
-    reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2",
+    reranker_model: str = "BAAI/bge-reranker-v2-m3",
     reranker_top_k: int = 50,
     final_top_k: int = 10,
     reranker_device: str = "cpu",
-    reranker_batch_size: int = 32,
-    reranker_max_pair_chars: int = 2000,
+    reranker_batch_size: int = 16,
+    reranker_max_pair_chars: int = 8000,
     embedding_model: str = "jinaai/jina-embeddings-v2-base-code",
     random_seed: int = 42,
 )
@@ -162,17 +162,19 @@ when building final evidence. When the model is unavailable the stage falls back
 
 ```python
 load_reranker_model(model_name: str = ..., device: str = "cpu") -> CrossEncoderLike | None
-build_reranker_input(query: str, chunk: CodeChunk, max_pair_chars: int = 2000) -> tuple[str, str]
+build_reranker_input(query: str, chunk: CodeChunk, max_pair_chars: int = 8000) -> tuple[str, str]
 score_query_chunk_pair(model: CrossEncoderLike, query: str, chunk: CodeChunk) -> float
 rerank_candidates(query: str, candidates: list[RetrievalResult], chunks_by_id: dict[str, CodeChunk], model=None, *, top_k: int, ...) -> list[RetrievalResult]
 reranker_fallback(candidates: list[RetrievalResult], *, top_k: int) -> list[RetrievalResult]
 compare_rrf_vs_reranker(cases: list[RerankerCase], *, model=None, k_values=(1, 3, 5, 10), ...) -> dict
 ```
 
-The default reranker model is `cross-encoder/ms-marco-MiniLM-L-6-v2` (lightweight, CPU, no extra
-dependencies); the model is configurable via `AIConfig.reranker` (`RerankerConfig`). Tunable
-hyperparameters live there: `reranker_top_k` (RRF candidate pool fed to the reranker) and
-`final_top_k` (final evidence count).
+The default reranker model is `BAAI/bge-reranker-v2-m3`: its 8192-token window fits a whole AST
+chunk, where the previous `cross-encoder/ms-marco-MiniLM-L-6-v2` had 512 and truncated 78% of the
+chunks it scored. It is a plain sequence-classification XLM-R, so it needs no extra dependencies,
+but it is 568M parameters — set `device: cpu` only for small pools. The model is configurable via
+`AIConfig.reranker` (`RerankerConfig`). Tunable hyperparameters live there: `reranker_top_k` (RRF
+candidate pool fed to the reranker) and `final_top_k` (final evidence count).
 
 ### Storage
 

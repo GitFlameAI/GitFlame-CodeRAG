@@ -50,7 +50,7 @@ from gitflame_coderag.retrieval.dense import dense_index_from_matrix
 from gitflame_coderag.schemas import EvidenceChunk, ExperimentConfig
 
 DEFAULT_EMBEDDING_MODEL = "jinaai/jina-embeddings-v2-base-code"
-DEFAULT_RERANKER_MODEL = "cross-encoder/ms-marco-MiniLM-L6-v2"
+DEFAULT_RERANKER_MODEL = "BAAI/bge-reranker-v2-m3"
 DEFAULT_K_VALUES = (5, 10, 15)
 DEFAULT_CONFIG_NAMES = (
     "bm25_only",
@@ -280,7 +280,7 @@ def parse_args() -> argparse.Namespace:
             "full_rrf,full_rrf_reranker"
         ),
     )
-    parser.add_argument("--max-pair-chars", type=int, default=2000)
+    parser.add_argument("--max-pair-chars", type=int, default=8000)
     parser.add_argument("--fail-fast", action="store_true")
     parser.add_argument(
         "--attention-budget-gib",

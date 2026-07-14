@@ -36,6 +36,8 @@ from gitflame_coderag.embeddings import (
     describe_embedding_backend,
     embed_chunks_matrix,
     embed_query,
+    load_embedding_cache,
+    save_embedding_cache,
 )
 from gitflame_coderag.embeddings.service import last_encode_peak_bytes
 from gitflame_coderag.experiments.file_metrics import (
@@ -68,7 +70,7 @@ from gitflame_coderag.schemas import (
 )
 
 DEFAULT_EMBEDDING_MODEL = "jinaai/jina-embeddings-v2-base-code"
-DEFAULT_RERANKER_MODEL = "cross-encoder/ms-marco-MiniLM-L6-v2"
+DEFAULT_RERANKER_MODEL = "BAAI/bge-reranker-v2-m3"
 DEFAULT_K_VALUES = (5, 10, 15)
 DEFAULT_STAGE1_N_VALUES = (10, 20, 50, 100, 200)
 
@@ -173,11 +175,15 @@ class CandidateChunkCache:
 
 
 class ChunkEmbeddingCache:
-    """Embed candidate chunks once per repository, not once per issue x config.
+    """Embed candidate chunks once per repository, not once per issue x config -- and, when
+    ``disk_cache_dir`` is set, not once per script run either.
 
     Stage-1 candidate sets overlap heavily across issues and configs of the same
     repository, and chunk ids are content-derived, so a plain id-keyed cache turns the
-    embedding cost from "per issue x config" into "per distinct chunk ever selected".
+    embedding cost from "per issue x config" into "per distinct chunk ever selected". The
+    disk-backed layer extends that same id-keyed reuse across process restarts: vectors
+    computed by a previous run of this script, or by ``scripts/build_embedding_cache.py``,
+    are loaded once at construction and never recomputed.
     """
 
     def __init__(
@@ -186,14 +192,34 @@ class ChunkEmbeddingCache:
         model_name: str,
         batch_size: int,
         attention_budget_bytes: int | None = None,
+        repository_id: str,
+        revision: str,
+        disk_cache_dir: Path | None = None,
     ) -> None:
         self._model_name = model_name
         self._batch_size = batch_size
         self._attention_budget_bytes = attention_budget_bytes
+        self._repository_id = repository_id
+        self._revision = revision
+        self._disk_cache_dir = disk_cache_dir
         self._vectors: dict[str, np.ndarray] = {}
+        self._pending_save: dict[str, np.ndarray] = {}
         self.embedded_chunks = 0
         self.reused_chunks = 0
+        self.loaded_from_disk = 0
         self.embedding_seconds = 0.0
+
+        if disk_cache_dir is not None:
+            self._vectors = load_embedding_cache(
+                disk_cache_dir, repository_id, revision, model_name
+            )
+            self.loaded_from_disk = len(self._vectors)
+            if self._vectors:
+                print(
+                    f"      embedding cache: loaded {self.loaded_from_disk} vectors from "
+                    f"{disk_cache_dir} ({repository_id}, {model_name})",
+                    flush=True,
+                )
 
     def build(
         self,
@@ -208,6 +234,28 @@ class ChunkEmbeddingCache:
         chunk_ids = [chunk.id for chunk in chunks]
         matrix = np.asarray([self._vectors[chunk_id] for chunk_id in chunk_ids], dtype=np.float32)
         return dense_index_from_matrix(chunk_ids, matrix)
+
+    def flush(self) -> None:
+        """Persist vectors embedded (not loaded) this run to disk, merging with what's there.
+
+        Called once per repository rather than after every issue: within a repository the
+        pending set only grows, so writing it once at the end avoids rewriting the whole
+        cache file on every issue.
+        """
+        if self._disk_cache_dir is None or not self._pending_save:
+            return
+        path = save_embedding_cache(
+            self._disk_cache_dir,
+            self._repository_id,
+            self._revision,
+            self._model_name,
+            self._pending_save,
+        )
+        print(
+            f"      embedding cache: saved {len(self._pending_save)} new vectors to {path}",
+            flush=True,
+        )
+        self._pending_save = {}
 
     def _embed(
         self,
@@ -245,6 +293,7 @@ class ChunkEmbeddingCache:
         )
         for row, chunk_id in enumerate(chunk_ids):
             self._vectors[chunk_id] = matrix[row]
+            self._pending_save[chunk_id] = matrix[row]
 
         elapsed = perf_counter() - started
         self.embedded_chunks += len(missing)
@@ -515,6 +564,9 @@ def run_repository(
         model_name=args.embedding_model,
         batch_size=args.embedding_batch_size,
         attention_budget_bytes=attention_budget_bytes(args),
+        repository_id=repository_id,
+        revision=args.revision,
+        disk_cache_dir=None if args.no_embedding_cache else args.embedding_cache_dir,
     )
     print(
         f"  {repository_id}: running {len(issues)} issues x {len(configs)} configs "
@@ -623,6 +675,7 @@ def run_repository(
             flush=True,
         )
 
+    embedding_cache.flush()
     print(
         f"  {repository_id}: chunked {chunk_cache.built_sets} candidate sets in "
         f"{chunk_cache.chunking_seconds:.1f}s, reused {chunk_cache.reused_sets} across configs "
@@ -632,7 +685,9 @@ def run_repository(
     print(
         f"  {repository_id}: embedded {embedding_cache.embedded_chunks} distinct chunks in "
         f"{embedding_cache.embedding_seconds:.1f}s, reused {embedding_cache.reused_chunks} "
-        f"from cache (single-stage would embed the whole repository)",
+        f"in-run (single-stage would embed the whole repository); "
+        f"{embedding_cache.loaded_from_disk} more came from the disk cache before this run "
+        f"started",
         flush=True,
     )
     return (
@@ -766,10 +821,30 @@ def parse_args() -> argparse.Namespace:
 
     parser.add_argument("--embedding-model", default=DEFAULT_EMBEDDING_MODEL)
     parser.add_argument("--embedding-batch-size", type=int, default=128)
+    parser.add_argument(
+        "--embedding-cache-dir",
+        type=Path,
+        default=Path("cache/embeddings"),
+        help=(
+            "Directory holding the persistent embedding cache (see "
+            "gitflame_coderag.embeddings.cache and scripts/build_embedding_cache.py). "
+            "Vectors computed by this run are saved there and reused by later runs of "
+            "either script, keyed by (repository_id, revision, embedding_model); a chunk "
+            "id already on disk is never re-embedded."
+        ),
+    )
+    parser.add_argument(
+        "--no-embedding-cache",
+        action="store_true",
+        help="Disable the persistent embedding cache: embed every chunk in-process, "
+        "same as before it existed.",
+    )
     parser.add_argument("--reranker-model", default=DEFAULT_RERANKER_MODEL)
     parser.add_argument("--reranker-device", default="cuda")
-    parser.add_argument("--reranker-batch-size", type=int, default=32)
-    parser.add_argument("--max-pair-chars", type=int, default=2000)
+    parser.add_argument("--reranker-batch-size", type=int, default=16)
+    # Sized so the reranker's own token window, not this character cut, truncates a chunk.
+    # See DEFAULT_MAX_PAIR_CHARS in retrieval.reranker.
+    parser.add_argument("--max-pair-chars", type=int, default=8000)
     parser.add_argument("--fail-fast", action="store_true")
     parser.add_argument(
         "--attention-budget-gib",
@@ -894,6 +969,9 @@ def build_config_summary(args: argparse.Namespace) -> dict[str, Any]:
         "k_values": list(args.k_values),
         "embedding_model": args.embedding_model,
         "embedding_batch_size": args.embedding_batch_size,
+        "embedding_cache_dir": (
+            None if args.no_embedding_cache else str(args.embedding_cache_dir)
+        ),
         "attention_budget_gib": args.attention_budget_gib,
         "reranker_model": args.reranker_model,
         "reranker_device": args.reranker_device,
