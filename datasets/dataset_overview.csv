@@ -14,13 +14,6 @@ small,repo_012_node_ts_graphql,6,12,7,12
 small,repo_013_python_lru_cache,4,13,7,9
 small,repo_014_python_task_queue,4,11,7,8
 small,repo_015_python_state_machine,4,11,7,10
-medium,repo_medium_001,100,50000,7,7
-medium,repo_medium_002,100,50000,7,7
-medium,repo_medium_003,100,50000,7,7
-medium,repo_medium_004,100,50000,7,7
-medium,repo_medium_005,100,50000,7,7
-large,repo_large_001,1000,500000,7,7
-large,repo_large_002,1000,500000,7,7
 github,repo_019_mkcert,7,47,5,7
 github,repo_020_hyperfine,48,354,5,5
 github,repo_021_deepseek_v3,5,55,5,6
@@ -49,9 +42,9 @@ github,repo_044_design_md,90,706,5,6
 github,repo_045_whenever,30,153,5,5
 github,repo_046_big_list_of_naughty_strings,6,27,5,5
 github,repo_047_gum,73,197,5,5
-github,repo_048_dockge,76,307,5,6
+github,repo_048_dockge,74,307,5,6
 github,repo_049_rathole,23,211,5,6
-github,repo_050_kaminari,44,247,5,5
+github,repo_050_kaminari,35,247,5,5
 github,repo_051_jwt_auth,65,371,5,5
 github,repo_052_age,46,410,5,5
 github,repo_053_agents_md,22,58,5,6
@@ -61,7 +54,7 @@ github,repo_056_wtfpython,8,11,5,6
 github,repo_057_mux,17,260,5,5
 github,repo_058_gpt_crawler,10,22,5,5
 github,repo_059_bore,8,23,5,7
-github,repo_060_pundit,64,223,5,7
+github,repo_060_pundit,47,223,5,7
 github,repo_061_500_ai_agents_projects,28,248,5,6
 github,repo_062_hey,8,47,5,7
 github,repo_063_deep_research,9,49,5,7
@@ -96,8 +89,7 @@ github,repo_091_reflectioncommon,6,31,4,5
 github,repo_092_itchat,19,227,4,6
 github,repo_093_ffuf,61,364,4,5
 github,repo_094_passport,34,1793,4,4
-github,repo_095_grex,28,614,4,7
-github,repo_096_readme_typing_svg,17,104,4,4
+github,repo_096_readme_typing_svg,14,104,4,4
 github,repo_097_heretic,16,148,4,6
 github,repo_098_chalk,13,77,4,5
 github,repo_099_genlayer_project_boilerplate,46,272,4,7
@@ -109,7 +101,7 @@ github,repo_104_draw_a_ui,11,45,4,5
 github,repo_105_sshx,43,295,4,6
 github,repo_106_jsbridge,17,46,4,5
 github,repo_107_markup,14,113,4,5
-github,repo_108_chatterbox,58,438,4,4
+github,repo_108_chatterbox,13,438,4,4
 github,repo_109_duf,19,90,4,5
 github,repo_110_flv_js,44,160,4,5
 github,repo_111_sd,13,127,4,5
@@ -120,3 +112,4 @@ github,repo_115_goquery,30,660,4,4
 github,repo_116_js_cookie,19,237,4,5
 github,repo_117_boringtun,31,390,4,5
 github,repo_118_httparty,75,438,4,6
+large_external,repo_119_elasticsearch,22905,361344,50,102
