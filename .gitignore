@@ -11,8 +11,9 @@ htmlcov/
 dist/
 build/
 *.egg-info/
-
+.vscode/
 # Model/index artifacts (the synthetic repository dataset IS committed)
 artifacts/
 models/
-
+results/
+datasets/big_repo/

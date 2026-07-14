@@ -1,0 +1,74 @@
+version: 1
+repository:
+  name: better_errors
+  full_name: BetterErrors/better_errors
+  url: https://github.com/BetterErrors/better_errors
+  default_branch: master
+  revision: fde3b7025db17b5cda13fcf8d08dfb3f76e189f6
+  license: MIT
+  stars: 6869
+  language_priority:
+  - ruby
+analysis:
+  enabled: true
+  include:
+  - lib/**
+  - spec/**
+  exclude:
+  - '**/.*/**'
+  - '**/node_modules/**'
+  - '**/vendor/**'
+  - '**/third_party/**'
+  - '**/dist/**'
+  - '**/build/**'
+  - '**/target/**'
+  - '**/.git/**'
+  - '**/__pycache__/**'
+  - '**/site-packages/**'
+  - '**/.venv/**'
+  - '*.min.js'
+  - '*.min.css'
+  - '*.lock'
+  - '*_pb2.py'
+  - '*_pb2_grpc.py'
+  - '*.pb.go'
+issues:
+  source: github
+  format: github_issue
+  fields:
+  - title
+  - body
+  - labels
+  - expected_files
+chunking:
+  strategy: ast_aware
+  fallback_strategy: fixed_window
+  max_chunk_lines: 80
+  overlap_lines: 10
+  include_metadata: true
+ast_grep:
+  enabled: true
+  extract_symbols: true
+  extract_imports: true
+  extract_handlers: true
+  extract_tests: true
+retrieval:
+  top_k: 10
+  use_bm25: true
+  use_dense: true
+  use_ast_candidates: true
+  fusion_method: rrf
+embeddings:
+  model: server_controlled
+  normalize_vectors: true
+  batch_size: 32
+storage:
+  store_chunks: true
+  store_embeddings: true
+  store_retrieval_runs: true
+evaluation:
+  metrics:
+  - precision_at_k
+  - recall_at_k
+  - mrr
+  - ndcg_at_k

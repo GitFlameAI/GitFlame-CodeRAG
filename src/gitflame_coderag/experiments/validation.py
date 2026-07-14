@@ -22,7 +22,8 @@ from gitflame_coderag.ingestion import (
 
 Severity = Literal["error", "warning"]
 
-EXPECTED_ISSUES_PER_REPO = 7
+MIN_ISSUES_PER_REPO = 3
+MAX_ISSUES_PER_REPO = 7
 
 
 @dataclass
@@ -121,11 +122,11 @@ def validate_experiment_inputs(
         except Exception as error:  # noqa: BLE001
             add("error", "invalid_issues", f"issues.jsonl could not be parsed: {error}")
     report.n_issues = len(issues)
-    if issues and len(issues) != EXPECTED_ISSUES_PER_REPO:
+    if issues and not (MIN_ISSUES_PER_REPO <= len(issues) <= MAX_ISSUES_PER_REPO):
         add(
             "warning",
             "unexpected_issue_count",
-            f"expected {EXPECTED_ISSUES_PER_REPO} issues, found {len(issues)}",
+            f"expected {MIN_ISSUES_PER_REPO}-{MAX_ISSUES_PER_REPO} issues, found {len(issues)}",
         )
 
     seen_ids: set[str] = set()

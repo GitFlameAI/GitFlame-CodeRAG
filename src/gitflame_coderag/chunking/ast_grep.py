@@ -188,6 +188,7 @@ def extract_structural_metadata(
     """Extract lightweight structural metadata from a chunk."""
 
     content = raw_content if raw_content is not None else chunk.content
+    code = strip_comments_and_strings(content)
     defined_symbols = [chunk.symbol_name] if chunk.symbol_name else []
 
     flags = {
@@ -206,9 +207,9 @@ def extract_structural_metadata(
     return StructuralMetadata(
         chunk_id=chunk.id,
         imports=sorted(set(extract_imports(content, chunk.language))),
-        calls=sorted(set(extract_calls(content))),
+        calls=sorted(set(calls_in_code(code))),
         defined_symbols=sorted(set(defined_symbols)),
-        referenced_symbols=sorted(set(extract_referenced_symbols(content))),
+        referenced_symbols=sorted(set(referenced_symbols_in_code(code))),
         flags=flags,
     )
 
@@ -429,20 +430,26 @@ def extract_imports(content: str, language: str) -> list[str]:
 def extract_calls(content: str) -> list[str]:
     """Extract function/method call-like identifiers from chunk text."""
 
-    calls = re.findall(
-        r"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(",
-        strip_comments_and_strings(content),
-    )
-    return [call for call in calls if call not in CALL_EXCLUDED_KEYWORDS]
+    return calls_in_code(strip_comments_and_strings(content))
 
 
 def extract_referenced_symbols(content: str) -> list[str]:
     """Extract identifier-like symbols from code text."""
 
-    identifiers = re.findall(
-        r"\b[A-Za-z_][A-Za-z0-9_]*\b",
-        strip_comments_and_strings(content),
-    )
+    return referenced_symbols_in_code(strip_comments_and_strings(content))
+
+
+def calls_in_code(code: str) -> list[str]:
+    """Extract calls from text that comments and strings were already cut from."""
+
+    calls = re.findall(r"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(", code)
+    return [call for call in calls if call not in CALL_EXCLUDED_KEYWORDS]
+
+
+def referenced_symbols_in_code(code: str) -> list[str]:
+    """Extract symbols from text that comments and strings were already cut from."""
+
+    identifiers = re.findall(r"\b[A-Za-z_][A-Za-z0-9_]*\b", code)
     return [
         identifier
         for identifier in identifiers
@@ -460,8 +467,13 @@ def strip_comments_and_strings(content: str) -> str:
         without_block_comments,
         flags=re.MULTILINE,
     )
+    # The body alternatives must stay disjoint (an escape starts with a
+    # backslash, a plain character can never be one) and the loop possessive.
+    # An ambiguous body makes an unterminated quote -- which comment stripping
+    # alone can produce, e.g. from "https://x" -- backtrack 2^(backslashes)
+    # times before it fails.
     return re.sub(
-        r"(['\"])(?:\\.|(?!\1).)*\1",
+        r"(['\"])(?:\\.|(?!\1)[^\\])*+\1",
         " ",
         without_line_comments,
         flags=re.DOTALL,

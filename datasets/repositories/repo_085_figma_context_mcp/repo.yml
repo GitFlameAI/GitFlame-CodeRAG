@@ -1,0 +1,77 @@
+version: 1
+repository:
+  name: Figma-Context-MCP
+  full_name: GLips/Figma-Context-MCP
+  url: https://github.com/GLips/Figma-Context-MCP
+  default_branch: main
+  revision: c083d65c7e002923e7cb98f4e3bdafb105e90f6d
+  license: MIT
+  stars: 15382
+  language_priority:
+  - typescript
+  - javascript
+analysis:
+  enabled: true
+  include:
+  - '*.js'
+  - '*.ts'
+  - scripts/**
+  - src/**
+  exclude:
+  - '**/.*/**'
+  - '**/node_modules/**'
+  - '**/vendor/**'
+  - '**/third_party/**'
+  - '**/dist/**'
+  - '**/build/**'
+  - '**/target/**'
+  - '**/.git/**'
+  - '**/__pycache__/**'
+  - '**/site-packages/**'
+  - '**/.venv/**'
+  - '*.min.js'
+  - '*.min.css'
+  - '*.lock'
+  - '*_pb2.py'
+  - '*_pb2_grpc.py'
+  - '*.pb.go'
+issues:
+  source: github
+  format: github_issue
+  fields:
+  - title
+  - body
+  - labels
+  - expected_files
+chunking:
+  strategy: ast_aware
+  fallback_strategy: fixed_window
+  max_chunk_lines: 80
+  overlap_lines: 10
+  include_metadata: true
+ast_grep:
+  enabled: true
+  extract_symbols: true
+  extract_imports: true
+  extract_handlers: true
+  extract_tests: true
+retrieval:
+  top_k: 10
+  use_bm25: true
+  use_dense: true
+  use_ast_candidates: true
+  fusion_method: rrf
+embeddings:
+  model: server_controlled
+  normalize_vectors: true
+  batch_size: 32
+storage:
+  store_chunks: true
+  store_embeddings: true
+  store_retrieval_runs: true
+evaluation:
+  metrics:
+  - precision_at_k
+  - recall_at_k
+  - mrr
+  - ndcg_at_k

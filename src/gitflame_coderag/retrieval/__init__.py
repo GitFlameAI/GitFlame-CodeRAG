@@ -17,8 +17,17 @@ from gitflame_coderag.retrieval.reranker import (
     score_query_chunk_pair,
 )
 
+from gitflame_coderag.retrieval.ast import (
+    AstIndex,
+    ast_candidate_search,
+    ast_search_index,
+    build_ast_index,
+)
 from gitflame_coderag.retrieval.dense import (
+    DenseIndex,
+    build_dense_index,
     cosine_similarity,
+    dense_index_from_matrix,
     dense_retrieval_pgvector,
     dense_search,
     rank_dense_results,
@@ -39,14 +48,21 @@ from gitflame_coderag.retrieval.metrics import (
 from gitflame_coderag.retrieval.rrf import rrf_fusion
 
 __all__ = [
+    "AstIndex",
     "BM25Index",
+    "DenseIndex",
     "RerankerCase",
+    "ast_candidate_search",
+    "ast_search_index",
     "bm25_search",
+    "build_ast_index",
     "build_bm25_index",
     "build_bm25_query",
     "build_bm25_text",
+    "build_dense_index",
     "build_evidence_chunks",
     "build_evidence_scores",
+    "dense_index_from_matrix",
     "compute_average_precision_at_k",
     "compute_map_ndcg",
     "compute_mrr",

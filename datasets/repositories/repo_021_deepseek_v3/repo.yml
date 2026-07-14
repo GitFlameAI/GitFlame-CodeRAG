@@ -1,0 +1,73 @@
+version: 1
+repository:
+  name: DeepSeek-V3
+  full_name: deepseek-ai/DeepSeek-V3
+  url: https://github.com/deepseek-ai/DeepSeek-V3
+  default_branch: main
+  revision: 9b4e9788e4a3a731f7567338ed15d3ec549ce03b
+  license: MIT
+  stars: 103911
+  language_priority:
+  - python
+analysis:
+  enabled: true
+  include:
+  - inference/**
+  exclude:
+  - '**/.*/**'
+  - '**/node_modules/**'
+  - '**/vendor/**'
+  - '**/third_party/**'
+  - '**/dist/**'
+  - '**/build/**'
+  - '**/target/**'
+  - '**/.git/**'
+  - '**/__pycache__/**'
+  - '**/site-packages/**'
+  - '**/.venv/**'
+  - '*.min.js'
+  - '*.min.css'
+  - '*.lock'
+  - '*_pb2.py'
+  - '*_pb2_grpc.py'
+  - '*.pb.go'
+issues:
+  source: github
+  format: github_issue
+  fields:
+  - title
+  - body
+  - labels
+  - expected_files
+chunking:
+  strategy: ast_aware
+  fallback_strategy: fixed_window
+  max_chunk_lines: 80
+  overlap_lines: 10
+  include_metadata: true
+ast_grep:
+  enabled: true
+  extract_symbols: true
+  extract_imports: true
+  extract_handlers: true
+  extract_tests: true
+retrieval:
+  top_k: 10
+  use_bm25: true
+  use_dense: true
+  use_ast_candidates: true
+  fusion_method: rrf
+embeddings:
+  model: server_controlled
+  normalize_vectors: true
+  batch_size: 32
+storage:
+  store_chunks: true
+  store_embeddings: true
+  store_retrieval_runs: true
+evaluation:
+  metrics:
+  - precision_at_k
+  - recall_at_k
+  - mrr
+  - ndcg_at_k

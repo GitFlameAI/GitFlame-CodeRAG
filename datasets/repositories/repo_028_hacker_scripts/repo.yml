@@ -1,0 +1,92 @@
+version: 1
+repository:
+  name: hacker-scripts
+  full_name: NARKOZ/hacker-scripts
+  url: https://github.com/NARKOZ/hacker-scripts
+  default_branch: master
+  revision: b14a0a89bdf743c63ca4cc9cbcd866e050d7b3b0
+  license: null
+  stars: 49751
+  language_priority:
+  - python
+  - javascript
+  - java
+  - kotlin
+  - ruby
+  - shell
+  - go
+  - php
+  - csharp
+  - scala
+analysis:
+  enabled: true
+  include:
+  - '*.rb'
+  - '*.sh'
+  - CSharp/**
+  - go/**
+  - java/**
+  - kotlin/**
+  - nodejs/**
+  - php/**
+  - python/**
+  - python3/**
+  - scala/**
+  exclude:
+  - '**/.*/**'
+  - '**/node_modules/**'
+  - '**/vendor/**'
+  - '**/third_party/**'
+  - '**/dist/**'
+  - '**/build/**'
+  - '**/target/**'
+  - '**/.git/**'
+  - '**/__pycache__/**'
+  - '**/site-packages/**'
+  - '**/.venv/**'
+  - '*.min.js'
+  - '*.min.css'
+  - '*.lock'
+  - '*_pb2.py'
+  - '*_pb2_grpc.py'
+  - '*.pb.go'
+issues:
+  source: github
+  format: github_issue
+  fields:
+  - title
+  - body
+  - labels
+  - expected_files
+chunking:
+  strategy: ast_aware
+  fallback_strategy: fixed_window
+  max_chunk_lines: 80
+  overlap_lines: 10
+  include_metadata: true
+ast_grep:
+  enabled: true
+  extract_symbols: true
+  extract_imports: true
+  extract_handlers: true
+  extract_tests: true
+retrieval:
+  top_k: 10
+  use_bm25: true
+  use_dense: true
+  use_ast_candidates: true
+  fusion_method: rrf
+embeddings:
+  model: server_controlled
+  normalize_vectors: true
+  batch_size: 32
+storage:
+  store_chunks: true
+  store_embeddings: true
+  store_retrieval_runs: true
+evaluation:
+  metrics:
+  - precision_at_k
+  - recall_at_k
+  - mrr
+  - ndcg_at_k

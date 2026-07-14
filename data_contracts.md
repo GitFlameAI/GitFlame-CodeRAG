@@ -28,6 +28,31 @@ detect_language(path: Path, content: str) -> str
 build_file_metadata(path: Path, content: str, repository_id: str, revision: str) -> FileMetadata
 ```
 
+### GitHub dataset collection
+
+`ingestion/github.py` builds dataset entries from real GitHub repositories, driven by
+`scripts/fetch_github_dataset.py` (`discover` -> manifest, `fetch` -> dataset). It writes
+`datasets/original_repositories/<repository_id>/{code/, repo.yml}` and **never** writes
+`issues.jsonl`, which is authored by hand.
+
+```python
+discover_repositories(client: GitHubClient, *, languages: list[str], filters: FileFilters, limit: int, ...) -> list[RepoCandidate]
+fetch_repository(client: GitHubClient, spec: RepoSpec, dest_root: Path, filters: FileFilters | None = None, *, issues_source: str = "github", force: bool = False) -> FetchResult
+select_files(entries: Iterable[TreeEntry], filters: FileFilters, *, subdir: str | None = None) -> list[TreeEntry]
+build_repo_config(metadata: dict[str, Any], commit: str, paths: list[str], ...) -> dict[str, Any]
+load_manifest(path: Path) -> list[RepoSpec]
+```
+
+`FileFilters` is the dataset budget: `max_files` (default 100), `min_files`, `max_file_bytes`,
+the source-extension whitelist (`LANGUAGES_BY_EXTENSION`) and the exclude globs. The file count
+is measured on the Git Trees API response, so an over-budget repository is rejected before it is
+downloaded. Fetching pins a commit sha: it lands in `repo.yml` as `repository.revision` and is
+the `revision` to pass to `load_repository_files`.
+
+The `analysis.include` / `analysis.exclude` patterns written into a generated `repo.yml` select
+exactly the files that were copied into `code/` — the generator and `filter_files_by_config`
+share the glob implementation, so the round trip is exact.
+
 ### Chunking
 
 ```python

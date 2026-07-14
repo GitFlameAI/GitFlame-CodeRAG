@@ -1,0 +1,73 @@
+version: 1
+repository:
+  name: DeepCopy
+  full_name: myclabs/DeepCopy
+  url: https://github.com/myclabs/DeepCopy
+  default_branch: 1.x
+  revision: 5ee4e978b7fec6dbd844282126a5a32daa2044c6
+  license: MIT
+  stars: 8888
+  language_priority:
+  - php
+analysis:
+  enabled: true
+  include:
+  - src/**
+  exclude:
+  - '**/.*/**'
+  - '**/node_modules/**'
+  - '**/vendor/**'
+  - '**/third_party/**'
+  - '**/dist/**'
+  - '**/build/**'
+  - '**/target/**'
+  - '**/.git/**'
+  - '**/__pycache__/**'
+  - '**/site-packages/**'
+  - '**/.venv/**'
+  - '*.min.js'
+  - '*.min.css'
+  - '*.lock'
+  - '*_pb2.py'
+  - '*_pb2_grpc.py'
+  - '*.pb.go'
+issues:
+  source: github
+  format: github_issue
+  fields:
+  - title
+  - body
+  - labels
+  - expected_files
+chunking:
+  strategy: ast_aware
+  fallback_strategy: fixed_window
+  max_chunk_lines: 80
+  overlap_lines: 10
+  include_metadata: true
+ast_grep:
+  enabled: true
+  extract_symbols: true
+  extract_imports: true
+  extract_handlers: true
+  extract_tests: true
+retrieval:
+  top_k: 10
+  use_bm25: true
+  use_dense: true
+  use_ast_candidates: true
+  fusion_method: rrf
+embeddings:
+  model: server_controlled
+  normalize_vectors: true
+  batch_size: 32
+storage:
+  store_chunks: true
+  store_embeddings: true
+  store_retrieval_runs: true
+evaluation:
+  metrics:
+  - precision_at_k
+  - recall_at_k
+  - mrr
+  - ndcg_at_k

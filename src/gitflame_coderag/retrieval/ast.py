@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
+from dataclasses import dataclass
+
+import numpy as np
 
 from gitflame_coderag.schemas import CodeChunk, RetrievalResult, StructuralMetadata
 
@@ -22,6 +25,99 @@ AST_FIELD_WEIGHTS = {
 
 MIN_TERM_LENGTH = 2
 MAX_TERM_LENGTH = 64
+
+
+@dataclass
+class AstIndex:
+    """Inverted term -> (chunk positions, weights) index over AST metadata.
+
+    :func:`rank_ast_candidates` re-derives every chunk's searchable terms on each
+    call, which is pure waste when the same repository is queried once per issue
+    (~24s per call at 500k chunks). This index does that work once; a query then
+    only touches the postings of the terms it actually contains.
+
+    Each posting weight is the sum of :data:`AST_FIELD_WEIGHTS` over the fields of
+    that chunk containing the term, so scoring matches :func:`score_ast_chunk`.
+    """
+
+    chunk_ids: list[str]
+    postings: dict[str, tuple[np.ndarray, np.ndarray]]
+
+    def __len__(self) -> int:
+        return len(self.chunk_ids)
+
+
+def build_ast_index(
+    chunks: Sequence[CodeChunk],
+    metadata_by_chunk_id: dict[str, StructuralMetadata],
+) -> AstIndex:
+    """Build an :class:`AstIndex` over ``chunks``."""
+    chunk_ids: list[str] = []
+    positions: dict[str, list[int]] = {}
+    weights: dict[str, list[float]] = {}
+
+    for position, chunk in enumerate(chunks):
+        chunk_ids.append(chunk.id)
+        chunk_terms: dict[str, float] = {}
+        search_terms = build_ast_search_terms(chunk, metadata_by_chunk_id.get(chunk.id))
+        for field_name, field_terms in search_terms.items():
+            field_weight = AST_FIELD_WEIGHTS.get(field_name, 1.0)
+            for term in field_terms:
+                chunk_terms[term] = chunk_terms.get(term, 0.0) + field_weight
+        for term, weight in chunk_terms.items():
+            positions.setdefault(term, []).append(position)
+            weights.setdefault(term, []).append(weight)
+
+    postings = {
+        term: (
+            np.asarray(positions[term], dtype=np.int32),
+            np.asarray(weights[term], dtype=np.float32),
+        )
+        for term in positions
+    }
+    return AstIndex(chunk_ids=chunk_ids, postings=postings)
+
+
+def ast_search_index(
+    query_keywords: list[str],
+    index: AstIndex,
+    top_k: int,
+) -> list[RetrievalResult]:
+    """Return top-k chunks from a prebuilt :class:`AstIndex`."""
+    if top_k <= 0 or not index.chunk_ids:
+        return []
+
+    query_terms = normalize_query_terms(query_keywords)
+    if not query_terms:
+        return []
+
+    scores = np.zeros(len(index.chunk_ids), dtype=np.float32)
+    for term in query_terms:
+        posting = index.postings.get(term)
+        if posting is None:
+            continue
+        positions, weights = posting
+        scores[positions] += weights
+
+    # Only chunks with a positive structural overlap are candidates, matching
+    # rank_ast_candidates' `if score <= 0: continue`.
+    matched = np.flatnonzero(scores > 0)
+    if matched.size == 0:
+        return []
+
+    order = matched[
+        np.lexsort((np.asarray(index.chunk_ids)[matched], -scores[matched]))
+    ][:top_k]
+    return [
+        RetrievalResult(
+            chunk_id=index.chunk_ids[position],
+            rank=rank,
+            score=float(scores[position]),
+            source="ast",
+            ast_score=float(scores[position]),
+        )
+        for rank, position in enumerate(order, start=1)
+    ]
 
 
 def ast_candidate_search(

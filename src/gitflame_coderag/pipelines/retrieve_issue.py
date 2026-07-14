@@ -11,9 +11,9 @@ import re
 from uuid import uuid4
 
 from gitflame_coderag.embeddings import embed_query
-from gitflame_coderag.retrieval.ast import ast_candidate_search
-from gitflame_coderag.retrieval.bm25 import bm25_search, build_bm25_index
-from gitflame_coderag.retrieval.dense import dense_search
+from gitflame_coderag.retrieval.ast import AstIndex, ast_candidate_search, ast_search_index
+from gitflame_coderag.retrieval.bm25 import BM25Index, bm25_search, build_bm25_index
+from gitflame_coderag.retrieval.dense import DenseIndex, dense_search
 from gitflame_coderag.retrieval.evidence import build_evidence_chunks
 from gitflame_coderag.retrieval.reranker import CrossEncoderLike, rerank_candidates
 from gitflame_coderag.retrieval.rrf import rrf_fusion
@@ -51,15 +51,23 @@ def run_retrieval_core(
     metadata_by_chunk_id: dict[str, StructuralMetadata],
     config: ExperimentConfig,
     *,
-    embeddings: list[ChunkEmbedding] | None = None,
+    embeddings: list[ChunkEmbedding] | DenseIndex | None = None,
     query_vector: list[float] | None = None,
     reranker_model: CrossEncoderLike | None = None,
+    bm25_index: BM25Index | None = None,
+    ast_index: AstIndex | None = None,
 ) -> EvidenceBuildResult:
     """Run BM25/Dense/AST retrieval, optional RRF, optional reranker, and evidence build.
 
     Dense retrieval expects a precomputed ``query_vector``. This keeps the core
     pipeline pure and testable; DB/experiment wrappers can decide how to embed the
     issue query and which embedding model to use.
+
+    ``bm25_index``, ``ast_index`` and a :class:`DenseIndex` for ``embeddings`` are
+    optional prebuilt indexes. They are derived purely from ``chunks`` and their
+    metadata, so a caller running many issues against one repository should build
+    them once and pass them in; otherwise every call re-indexes the whole
+    repository, which dominates runtime at scale.
     """
     rankings = _collect_enabled_rankings(
         issue=issue,
@@ -68,6 +76,8 @@ def run_retrieval_core(
         config=config,
         embeddings=embeddings,
         query_vector=query_vector,
+        bm25_index=bm25_index,
+        ast_index=ast_index,
     )
     candidates = _finalize_candidates(
         issue=issue,
@@ -201,13 +211,15 @@ def _collect_enabled_rankings(
     chunks: list[CodeChunk],
     metadata_by_chunk_id: dict[str, StructuralMetadata],
     config: ExperimentConfig,
-    embeddings: list[ChunkEmbedding] | None,
+    embeddings: list[ChunkEmbedding] | DenseIndex | None,
     query_vector: list[float] | None,
+    bm25_index: BM25Index | None = None,
+    ast_index: AstIndex | None = None,
 ) -> list[list[RetrievalResult]]:
     rankings: list[list[RetrievalResult]] = []
 
     if config.use_bm25:
-        index = build_bm25_index(chunks, metadata_by_chunk_id)
+        index = bm25_index if bm25_index is not None else build_bm25_index(chunks, metadata_by_chunk_id)
         rankings.append(bm25_search(build_issue_query(issue), index, config.bm25_top_k))
 
     if config.use_dense:
@@ -218,14 +230,19 @@ def _collect_enabled_rankings(
         rankings.append(dense_search(query_vector, embeddings, config.dense_top_k))
 
     if config.use_ast:
-        rankings.append(
-            ast_candidate_search(
-                build_issue_keywords(issue),
-                chunks,
-                metadata_by_chunk_id,
-                config.ast_top_k,
+        if ast_index is not None:
+            rankings.append(
+                ast_search_index(build_issue_keywords(issue), ast_index, config.ast_top_k)
             )
-        )
+        else:
+            rankings.append(
+                ast_candidate_search(
+                    build_issue_keywords(issue),
+                    chunks,
+                    metadata_by_chunk_id,
+                    config.ast_top_k,
+                )
+            )
 
     return [ranking for ranking in rankings if ranking]
 

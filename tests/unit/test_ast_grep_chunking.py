@@ -24,6 +24,36 @@ def make_file(path: str, language: str, content: str) -> RepositoryFile:
     )
 
 
+def test_strip_comments_and_strings_removes_literals_and_comments() -> None:
+    content = "\n".join(
+        [
+            "/* block */ int a = compute(1);",
+            'String s = "text with (parens) and \\" escape"; // trailing',
+            "char c = '\\\\';",
+            "call(a);",
+        ]
+    )
+
+    stripped = ast_grep.strip_comments_and_strings(content)
+
+    assert "block" not in stripped
+    assert "trailing" not in stripped
+    assert "text with" not in stripped
+    assert "compute(1)" in stripped
+    assert "call(a)" in stripped
+
+
+def test_strip_comments_and_strings_does_not_backtrack_on_unterminated_quote() -> None:
+    # Comment stripping can eat a closing quote (a "https://x" literal is enough),
+    # and an ambiguous string pattern then explores 2^(backslashes) paths before
+    # giving up. 60 backslashes takes longer than the age of the universe.
+    content = '"' + "\\" * 60 + " tail with no closing quote"
+
+    stripped = ast_grep.strip_comments_and_strings(content)
+
+    assert "tail with no closing quote" in stripped
+
+
 def test_split_large_ast_chunk_keeps_parent_chunk_metadata() -> None:
     content = "\n".join(f"line {number}" for number in range(1, 8))
     chunk = CodeChunk(

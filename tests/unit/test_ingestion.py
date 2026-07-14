@@ -19,7 +19,9 @@ from gitflame_coderag.ingestion.issues import load_issues
 from gitflame_coderag.schemas import AIConfig
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-DATASET_ROOT = REPO_ROOT / "datasets" / "repositories"
+DATASET_ROOT = REPO_ROOT / "datasets" / "original_repositories"
+MIN_ISSUES_PER_REPO = 3
+MAX_ISSUES_PER_REPO = 7
 
 
 # --------------------------------------------------------------------------- #
@@ -195,9 +197,10 @@ def _repo_dirs() -> list[Path]:
     return sorted(p for p in DATASET_ROOT.iterdir() if p.is_dir() and (p / "repo.yml").exists())
 
 
-def test_dataset_has_10_to_15_repositories() -> None:
+def test_dataset_has_a_reasonable_repository_count() -> None:
+    # 15 small hand/LLM-authored repos + ~100 real repos fetched from GitHub.
     repos = _repo_dirs()
-    assert 10 <= len(repos) <= 15, f"expected 10-15 repos, found {len(repos)}"
+    assert 100 <= len(repos) <= 200, f"expected 100-200 repos, found {len(repos)}"
 
 
 @pytest.mark.parametrize("repo_dir", _repo_dirs(), ids=lambda p: p.name)
@@ -215,7 +218,10 @@ def test_each_repository_is_well_formed(repo_dir: Path) -> None:
     assert selected_paths, "config filtered out every file"
 
     issues = load_issues(repo_dir / "issues.jsonl", repo_dir.name)
-    assert len(issues) == 7, f"{repo_dir.name} must have exactly 7 issues"
+    assert MIN_ISSUES_PER_REPO <= len(issues) <= MAX_ISSUES_PER_REPO, (
+        f"{repo_dir.name} must have {MIN_ISSUES_PER_REPO}-{MAX_ISSUES_PER_REPO} issues, "
+        f"found {len(issues)}"
+    )
 
     # Every expected_file must exist in code/ and survive config filtering.
     all_paths = {f.metadata.path for f in files}

@@ -1,0 +1,981 @@
+version: 1
+repositories:
+- id: repo_019_mkcert
+  repo: FiloSottile/mkcert
+  ref: 1c1dc4ed27ed5936046b6398d39cab4d657a2d8e
+  stars: 59286
+  open_issues: 174
+  license: BSD-3-Clause
+  source_files: 7
+  languages:
+  - go
+- id: repo_020_hyperfine
+  repo: sharkdp/hyperfine
+  ref: f12f3d9f86f3643b3b7deace5e160b1f0f44d2b7
+  stars: 28468
+  open_issues: 85
+  license: Apache-2.0
+  source_files: 48
+  languages:
+  - rust
+  - python
+- id: repo_021_deepseek_v3
+  repo: deepseek-ai/DeepSeek-V3
+  ref: 9b4e9788e4a3a731f7567338ed15d3ec549ce03b
+  stars: 103911
+  open_issues: 242
+  license: MIT
+  source_files: 5
+  languages:
+  - python
+- id: repo_022_viper
+  repo: spf13/viper
+  ref: 528f7416c4b56a4948673984b190bf8713f0c3c4
+  stars: 30462
+  open_issues: 132
+  license: MIT
+  source_files: 33
+  languages:
+  - go
+- id: repo_023_agent_skills
+  repo: addyosmani/agent-skills
+  ref: 98967c45a42b88d6b8fb3a88b7ff6273920763d6
+  stars: 77827
+  open_issues: 132
+  license: MIT
+  source_files: 10
+  languages:
+  - shell
+  - javascript
+- id: repo_024_pretext
+  repo: chenglou/pretext
+  ref: ac49b09b7d83ede19581fa94a8b892b07d309baf
+  stars: 49092
+  open_issues: 84
+  license: MIT
+  source_files: 56
+  languages:
+  - typescript
+- id: repo_025_parsedown
+  repo: erusev/parsedown
+  ref: 4e433a8d57078645b55d21fd12c887d3ba6ca01e
+  stars: 15059
+  open_issues: 177
+  license: MIT
+  source_files: 6
+  languages:
+  - php
+- id: repo_026_nanogpt
+  repo: karpathy/nanoGPT
+  ref: 3adf61e154c3fe3fca428ad6bc3818b27a3b8291
+  stars: 61123
+  open_issues: 349
+  license: MIT
+  source_files: 15
+  languages:
+  - python
+- id: repo_027_cloudflarespeedtest
+  repo: XIU2/CloudflareSpeedTest
+  ref: 65b43aa58c5f9c7ab8ab83d2d27e35fc00d9cec4
+  stars: 27894
+  open_issues: 29
+  license: GPL-3.0
+  source_files: 13
+  languages:
+  - go
+  - shell
+- id: repo_028_hacker_scripts
+  repo: NARKOZ/hacker-scripts
+  ref: b14a0a89bdf743c63ca4cc9cbcd866e050d7b3b0
+  stars: 49751
+  open_issues: 71
+  license: null
+  source_files: 39
+  languages:
+  - python
+  - javascript
+  - java
+  - kotlin
+  - ruby
+  - shell
+  - go
+  - php
+  - csharp
+  - scala
+- id: repo_029_carbonyl
+  repo: fathyb/carbonyl
+  ref: ab80a276b1bd1c2c8dcefc8f248415dfc61dc2bf
+  stars: 19269
+  open_issues: 89
+  license: BSD-3-Clause
+  source_files: 69
+  languages:
+  - rust
+  - shell
+  - c
+  - cpp
+  - javascript
+- id: repo_030_eventbus
+  repo: greenrobot/EventBus
+  ref: 0194926b3bcf70cc0d7bfd3c5da16708dd5ab876
+  stars: 24718
+  open_issues: 147
+  license: Apache-2.0
+  source_files: 97
+  languages:
+  - java
+- id: repo_031_tmuxinator
+  repo: tmuxinator/tmuxinator
+  ref: 6d021f7befee0278155d16444bb8323008299997
+  stars: 13667
+  open_issues: 96
+  license: MIT
+  source_files: 35
+  languages:
+  - ruby
+  - shell
+- id: repo_032_phpdotenv
+  repo: vlucas/phpdotenv
+  ref: 416df702837983f8d5ff48c9c3fee4f5f57b980b
+  stars: 13541
+  open_issues: 13
+  license: BSD-3-Clause
+  source_files: 54
+  languages:
+  - php
+- id: repo_033_llama
+  repo: meta-llama/llama
+  ref: 689c7f261b9c5514636ecc3c5fefefcbb3e6eed7
+  stars: 59509
+  open_issues: 524
+  license: NOASSERTION
+  source_files: 8
+  languages:
+  - python
+  - shell
+- id: repo_034_logrus
+  repo: sirupsen/logrus
+  ref: a23d315dfebb6de47d18c92c8ae1430736a60b0c
+  stars: 25748
+  open_issues: 47
+  license: MIT
+  source_files: 47
+  languages:
+  - go
+- id: repo_035_navi
+  repo: denisidoro/navi
+  ref: 1ac218cb1e0e80649ef23c8a916e67efc3086833
+  stars: 17319
+  open_issues: 113
+  license: Apache-2.0
+  source_files: 53
+  languages:
+  - rust
+  - shell
+- id: repo_037_guides
+  repo: thoughtbot/guides
+  ref: 640b2cbad7abf926febd713647dea8f1f2cce402
+  stars: 9557
+  open_issues: 13
+  license: null
+  source_files: 10
+  languages:
+  - ruby
+  - javascript
+  - swift
+- id: repo_038_whoops
+  repo: filp/whoops
+  ref: cdef16d193af98d943219686fd7287bdd47c52a6
+  stars: 13239
+  open_issues: 9
+  license: MIT
+  source_files: 56
+  languages:
+  - php
+  - javascript
+- id: repo_039_agent_reach
+  repo: Panniantong/Agent-Reach
+  ref: e825f6740d24c6c315c3b0dc41907e6c87ff39a5
+  stars: 55670
+  open_issues: 149
+  license: MIT
+  source_files: 52
+  languages:
+  - python
+  - shell
+- id: repo_040_websocket
+  repo: gorilla/websocket
+  ref: e064f32e3674d9d79a8fd417b5bc06fa5c6cad8f
+  stars: 24810
+  open_issues: 78
+  license: BSD-2-Clause
+  source_files: 33
+  languages:
+  - go
+- id: repo_041_skills
+  repo: vercel-labs/skills
+  ref: 3176ae424e50bb7d3f20a7e085f31912b3f325d2
+  stars: 26006
+  open_issues: 878
+  license: null
+  source_files: 78
+  languages:
+  - typescript
+  - javascript
+- id: repo_042_lsd
+  repo: lsd-rs/lsd
+  ref: fecadf36235be734b3fd97c44e237f3a29eb1073
+  stars: 16122
+  open_issues: 196
+  license: Apache-2.0
+  source_files: 54
+  languages:
+  - rust
+- id: repo_043_gulp
+  repo: gulpjs/gulp
+  ref: 61f22dc11bb14234b555253095fa1d224ce0eab1
+  stars: 32957
+  open_issues: 34
+  license: MIT
+  source_files: 8
+  languages:
+  - javascript
+- id: repo_044_design_md
+  repo: google-labs-code/design.md
+  ref: ea4a3240d4c0d06778b9e39efeb553851be27c17
+  stars: 25818
+  open_issues: 44
+  license: Apache-2.0
+  source_files: 90
+  languages:
+  - typescript
+  - javascript
+- id: repo_045_whenever
+  repo: javan/whenever
+  ref: 756163ed1aa928c8abd629aa2f4904bc5226538c
+  stars: 8863
+  open_issues: 85
+  license: MIT
+  source_files: 30
+  languages:
+  - ruby
+- id: repo_046_big_list_of_naughty_strings
+  repo: minimaxir/big-list-of-naughty-strings
+  ref: db33ec7b1d5d9616a88c76394b7d0897bd0b97eb
+  stars: 47698
+  open_issues: 108
+  license: MIT
+  source_files: 6
+  languages:
+  - go
+  - python
+  - shell
+- id: repo_047_gum
+  repo: charmbracelet/gum
+  ref: 716d8b5d0221558f944b5a078dbbcca8572534fb
+  stars: 24026
+  open_issues: 179
+  license: MIT
+  source_files: 73
+  languages:
+  - go
+  - shell
+  - javascript
+  - python
+  - ruby
+- id: repo_048_dockge
+  repo: louislam/dockge
+  ref: f809ae192b571944ad773e9866d3e67064ae8043
+  stars: 23786
+  open_issues: 155
+  license: MIT
+  source_files: 76
+  languages:
+  - typescript
+  - vue
+  - javascript
+  - go
+- id: repo_049_rathole
+  repo: rathole-org/rathole
+  ref: 5a9dd6d939744859af322aeff7fd60f7483a68bc
+  stars: 13890
+  open_issues: 117
+  license: Apache-2.0
+  source_files: 23
+  languages:
+  - rust
+  - shell
+- id: repo_050_kaminari
+  repo: kaminari/kaminari
+  ref: 76511e3c2c09d8adcd3a686d2c3ec6829a98f37e
+  stars: 8678
+  open_issues: 75
+  license: MIT
+  source_files: 44
+  languages:
+  - ruby
+- id: repo_051_jwt_auth
+  repo: tymondesigns/jwt-auth
+  ref: 6c70930a92710d97e8e52b182fca2176097f33be
+  stars: 11491
+  open_issues: 613
+  license: MIT
+  source_files: 96
+  languages:
+  - php
+- id: repo_052_age
+  repo: FiloSottile/age
+  ref: 706dfc1e799a03443ae46023502bd88d4e9e324f
+  stars: 22851
+  open_issues: 27
+  license: BSD-3-Clause
+  source_files: 46
+  languages:
+  - go
+- id: repo_053_agents_md
+  repo: agentsmd/agents.md
+  ref: d1ac7f063d20e70015ed6732664049ae4ba9d74e
+  stars: 22991
+  open_issues: 157
+  license: MIT
+  source_files: 22
+  languages:
+  - typescript
+  - javascript
+- id: repo_054_dust
+  repo: bootandy/dust
+  ref: 93fe658574b1677052fba8b042283174b0fdef49
+  stars: 11984
+  open_issues: 23
+  license: Apache-2.0
+  source_files: 21
+  languages:
+  - rust
+  - shell
+- id: repo_055_awesome_leetcode_resources
+  repo: ashishps1/awesome-leetcode-resources
+  ref: 095f5a34af0414f147fe6efdcf1e070664eff362
+  stars: 17299
+  open_issues: 21
+  license: GPL-3.0
+  source_files: 56
+  languages:
+  - cpp
+  - csharp
+  - go
+  - java
+  - javascript
+  - python
+  - typescript
+- id: repo_056_wtfpython
+  repo: satwikkansal/wtfpython
+  ref: 9323b863218670404405e0a0b9f54d2841a7452e
+  stars: 37033
+  open_issues: 71
+  license: WTFPL
+  source_files: 8
+  languages:
+  - python
+- id: repo_057_mux
+  repo: gorilla/mux
+  ref: db9d1d0073d27a0a2d9a8c1bc52aa0af4374d265
+  stars: 21846
+  open_issues: 37
+  license: BSD-3-Clause
+  source_files: 17
+  languages:
+  - go
+- id: repo_058_gpt_crawler
+  repo: BuilderIO/gpt-crawler
+  ref: d2245d66a5ad60bf227a55c849135394cbecc9b5
+  stars: 22258
+  open_issues: 111
+  license: ISC
+  source_files: 10
+  languages:
+  - typescript
+  - shell
+  - javascript
+- id: repo_059_bore
+  repo: ekzhang/bore
+  ref: 00a735a89917642df62d84336a90d9476fa175b5
+  stars: 11302
+  open_issues: 14
+  license: MIT
+  source_files: 8
+  languages:
+  - rust
+- id: repo_060_pundit
+  repo: varvet/pundit
+  ref: 06318683c960066a2e499341cb372e0ff4540334
+  stars: 8515
+  open_issues: 15
+  license: MIT
+  source_files: 64
+  languages:
+  - ruby
+- id: repo_061_500_ai_agents_projects
+  repo: ashishpatel26/500-AI-Agents-Projects
+  ref: 9fda658c735ac50a64afd3b1a1c8f99e28595ebd
+  stars: 34299
+  open_issues: 87
+  license: MIT
+  source_files: 28
+  languages:
+  - python
+  - javascript
+- id: repo_062_hey
+  repo: rakyll/hey
+  ref: 5626f79b8698df6daf9b25799c9805c6acc96740
+  stars: 20178
+  open_issues: 187
+  license: Apache-2.0
+  source_files: 8
+  languages:
+  - go
+- id: repo_063_deep_research
+  repo: dzhng/deep-research
+  ref: 1f8f3e285bbc23e80b98a66a64effab9069f3ad4
+  stars: 19347
+  open_issues: 90
+  license: MIT
+  source_files: 9
+  languages:
+  - typescript
+  - javascript
+- id: repo_064_dufs
+  repo: sigoden/dufs
+  ref: fe7fd564f80dfbac361c8e0589c3845638149d38
+  stars: 10427
+  open_issues: 3
+  license: Apache-2.0
+  source_files: 34
+  languages:
+  - rust
+  - javascript
+  - shell
+- id: repo_065_scientist
+  repo: github/scientist
+  ref: 504a396e987f655a21c6bf2ed57935aadaa40859
+  stars: 7729
+  open_issues: 14
+  license: MIT
+  source_files: 13
+  languages:
+  - ruby
+- id: repo_066_kubectx
+  repo: ahmetb/kubectx
+  ref: c8393ea883fb241764d8d6ca2851685e1ad5fe02
+  stars: 19882
+  open_issues: 44
+  license: Apache-2.0
+  source_files: 62
+  languages:
+  - go
+- id: repo_067_codex_plugin_cc
+  repo: openai/codex-plugin-cc
+  ref: db52e28f4d9ded852ab3942cea316258ae4ef346
+  stars: 28314
+  open_issues: 321
+  license: Apache-2.0
+  source_files: 31
+  languages:
+  - javascript
+  - typescript
+- id: repo_068_warp
+  repo: seanmonstar/warp
+  ref: 118d504ac8a9841fbd132d5299eea24a8fc9cc36
+  stars: 10352
+  open_issues: 232
+  license: MIT
+  source_files: 84
+  languages:
+  - rust
+- id: repo_069_financial_services
+  repo: anthropics/financial-services
+  ref: 4aa51ed3d379731f8f9beff498d749580372699c
+  stars: 33451
+  open_issues: 172
+  license: Apache-2.0
+  source_files: 22
+  languages:
+  - python
+  - shell
+  - javascript
+- id: repo_070_sqlx
+  repo: jmoiron/sqlx
+  ref: 41dac167fdad5e3fd81d66cafba0951dc6823a30
+  stars: 17693
+  open_issues: 393
+  license: MIT
+  source_files: 16
+  languages:
+  - go
+- id: repo_071_aos
+  repo: michalsnik/aos
+  ref: 329fb34f777034345f4d3f4def4dc3bcc300cc2e
+  stars: 28067
+  open_issues: 373
+  license: MIT
+  source_files: 32
+  languages:
+  - javascript
+- id: repo_072_hexyl
+  repo: sharkdp/hexyl
+  ref: 6ecc29b9c8c84d08a7e860f7f69c22b113b480ea
+  stars: 10222
+  open_issues: 29
+  license: Apache-2.0
+  source_files: 7
+  languages:
+  - rust
+- id: repo_073_ml_from_scratch
+  repo: eriklindernoren/ML-From-Scratch
+  ref: a2806c6732eee8d27762edd6d864e0c179d8e9e8
+  stars: 32237
+  open_issues: 75
+  license: MIT
+  source_files: 82
+  languages:
+  - python
+- id: repo_074_websocketd
+  repo: joewalnes/websocketd
+  ref: d1a43cab937a6a534ca18a44b971a9eb0ea55515
+  stars: 17464
+  open_issues: 4
+  license: BSD-2-Clause
+  source_files: 91
+  languages:
+  - go
+  - javascript
+  - shell
+  - python
+  - csharp
+  - php
+  - ruby
+  - rust
+  - java
+  - swift
+- id: repo_075_rustdesk_server
+  repo: rustdesk/rustdesk-server
+  ref: 91fb928c6e9e7e61c9c8f569057e0a71b591c25b
+  stars: 10053
+  open_issues: 175
+  license: AGPL-3.0
+  source_files: 28
+  languages:
+  - rust
+  - javascript
+  - shell
+- id: repo_076_logger
+  repo: orhanobut/logger
+  ref: c64a72c2ce3d0fcdebe829b091e3a530c94ca6bd
+  stars: 13845
+  open_issues: 81
+  license: Apache-2.0
+  source_files: 24
+  languages:
+  - java
+  - kotlin
+- id: repo_077_better_errors
+  repo: BetterErrors/better_errors
+  ref: fde3b7025db17b5cda13fcf8d08dfb3f76e189f6
+  stars: 6869
+  open_issues: 68
+  license: MIT
+  source_files: 33
+  languages:
+  - ruby
+- id: repo_078_moneyprinterv2
+  repo: FujiwaraChoki/MoneyPrinterV2
+  ref: 5192af8eca97759f941834b947e3ceb209da0649
+  stars: 31200
+  open_issues: 94
+  license: AGPL-3.0
+  source_files: 23
+  languages:
+  - python
+  - shell
+- id: repo_079_saas_starter
+  repo: nextjs/saas-starter
+  ref: 6e33e58b1e553a41fe22e6b941a7229a002de361
+  stars: 15962
+  open_issues: 51
+  license: MIT
+  source_files: 42
+  languages:
+  - typescript
+  - javascript
+- id: repo_080_pkgx
+  repo: pkgxdev/pkgx
+  ref: 614dca64ba70bf0d2746308b542acd17396a5961
+  stars: 9866
+  open_issues: 31
+  license: Apache-2.0
+  source_files: 32
+  languages:
+  - rust
+  - python
+  - shell
+- id: repo_081_matisse
+  repo: zhihu/Matisse
+  ref: 21591aebe73a56435d84afc7b5cd50ea7ae2a6b8
+  stars: 12522
+  open_issues: 465
+  license: Apache-2.0
+  source_files: 48
+  languages:
+  - java
+- id: repo_082_dotenv
+  repo: bkeepers/dotenv
+  ref: 34156bf400cd67387fa6ed9f146778f6a2f5f743
+  stars: 6768
+  open_issues: 15
+  license: MIT
+  source_files: 29
+  languages:
+  - ruby
+- id: repo_083_httprouter
+  repo: julienschmidt/httprouter
+  ref: 484018016424d215c0b87c42f4c9b57d980fbd00
+  stars: 17134
+  open_issues: 84
+  license: BSD-3-Clause
+  source_files: 6
+  languages:
+  - go
+- id: repo_084_fetch
+  repo: JakeChampion/fetch
+  ref: ba5cf1ed2e02ebb96fa1e60b4fd2eb04071b60e4
+  stars: 25881
+  open_issues: 22
+  license: MIT
+  source_files: 10
+  languages:
+  - javascript
+- id: repo_085_figma_context_mcp
+  repo: GLips/Figma-Context-MCP
+  ref: c083d65c7e002923e7cb98f4e3bdafb105e90f6d
+  stars: 15383
+  open_issues: 22
+  license: MIT
+  source_files: 80
+  languages:
+  - typescript
+  - javascript
+- id: repo_086_min_sized_rust
+  repo: johnthagen/min-sized-rust
+  ref: 24233f98d9a8a484302408ed6b5431ed8f720321
+  stars: 9805
+  open_issues: 12
+  license: MIT
+  source_files: 6
+  languages:
+  - rust
+- id: repo_087_androidviewanimations
+  repo: daimajia/AndroidViewAnimations
+  ref: 6a35c466d23e49c5cd174289ebe8d9ccdbc69044
+  stars: 12448
+  open_issues: 66
+  license: MIT
+  source_files: 69
+  languages:
+  - java
+- id: repo_088_mailcatcher
+  repo: sj26/mailcatcher
+  ref: fbe811a53aeabe75b6e728b87f7f4c8fbf4b4843
+  stars: 6766
+  open_issues: 46
+  license: MIT
+  source_files: 14
+  languages:
+  - ruby
+- id: repo_089_frontend_slides
+  repo: zarazhangrui/frontend-slides
+  ref: 9906a34d640d2111f724544cbc50f7f130569ae1
+  stars: 25472
+  open_issues: 59
+  license: MIT
+  source_files: 8
+  languages:
+  - shell
+  - javascript
+  - python
+- id: repo_090_androidswipelayout
+  repo: daimajia/AndroidSwipeLayout
+  ref: 5f8678b04751fb8510a88586b22e07ccf64bca99
+  stars: 12364
+  open_issues: 383
+  license: MIT
+  source_files: 22
+  languages:
+  - java
+- id: repo_091_reflectioncommon
+  repo: phpDocumentor/ReflectionCommon
+  ref: ee15a5a2022c8383906b225055e9496a6a5e6e3b
+  stars: 9056
+  open_issues: 3
+  license: MIT
+  source_files: 7
+  languages:
+  - php
+- id: repo_092_itchat
+  repo: littlecodersh/ItChat
+  ref: d5ce5db32ca15cef8eefa548a438a9fcc4502a6d
+  stars: 26475
+  open_issues: 302
+  license: MIT
+  source_files: 19
+  languages:
+  - python
+  - javascript
+- id: repo_093_ffuf
+  repo: ffuf/ffuf
+  ref: 1571aa17535d8bfcf42258659a141df0b12efa51
+  stars: 16358
+  open_issues: 227
+  license: MIT
+  source_files: 61
+  languages:
+  - go
+- id: repo_094_passport
+  repo: jaredhanson/passport
+  ref: 217018dbc46dcd4118dd6f2c60c8d97010c587f8
+  stars: 23536
+  open_issues: 397
+  license: MIT
+  source_files: 34
+  languages:
+  - javascript
+- id: repo_095_grex
+  repo: pemistahl/grex
+  ref: 99cc347707375e00514f938b76d885a201dfc110
+  stars: 8156
+  open_issues: 18
+  license: Apache-2.0
+  source_files: 28
+  languages:
+  - rust
+  - python
+- id: repo_096_readme_typing_svg
+  repo: DenverCoder1/readme-typing-svg
+  ref: 5618b4bf65a1dab166a7182f978abd8476aca244
+  stars: 9056
+  open_issues: 62
+  license: MIT
+  source_files: 17
+  languages:
+  - php
+  - javascript
+- id: repo_097_heretic
+  repo: p-e-w/heretic
+  ref: c8a254b8251fcd7eadd061242a725f7338d3296e
+  stars: 26205
+  open_issues: 72
+  license: AGPL-3.0
+  source_files: 16
+  languages:
+  - python
+- id: repo_098_chalk
+  repo: chalk/chalk
+  ref: aa06bb5ac3f14df9fda8cfb54274dfc165ddfdef
+  stars: 23278
+  open_issues: 6
+  license: MIT
+  source_files: 13
+  languages:
+  - javascript
+  - typescript
+- id: repo_099_genlayer_project_boilerplate
+  repo: genlayerlabs/genlayer-project-boilerplate
+  ref: e685f1f12c4c357787d48390692a654baf576f03
+  stars: 14163
+  open_issues: 32
+  license: MIT
+  source_files: 46
+  languages:
+  - typescript
+  - python
+  - javascript
+- id: repo_100_foreman
+  repo: ddollar/foreman
+  ref: f65ddba83932bd4670e014389d6e27ea1e20b469
+  stars: 6155
+  open_issues: 72
+  license: MIT
+  source_files: 38
+  languages:
+  - ruby
+- id: repo_101_deepcopy
+  repo: myclabs/DeepCopy
+  ref: 5ee4e978b7fec6dbd844282126a5a32daa2044c6
+  stars: 8888
+  open_issues: 20
+  license: MIT
+  source_files: 67
+  languages:
+  - php
+- id: repo_102_mysql
+  repo: go-sql-driver/mysql
+  ref: dec193d8a1826fc147a6c0b678b8c7ff5fc36cb0
+  stars: 15270
+  open_issues: 68
+  license: MPL-2.0
+  source_files: 35
+  languages:
+  - go
+- id: repo_103_chinese_programmer_wrong_pronunciation
+  repo: shimohq/chinese-programmer-wrong-pronunciation
+  ref: cd0b6bfab2d35c70628d7efb3770a28fa7681a7b
+  stars: 23246
+  open_issues: 138
+  license: null
+  source_files: 9
+  languages:
+  - javascript
+  - python
+  - shell
+- id: repo_104_draw_a_ui
+  repo: SawyerHood/draw-a-ui
+  ref: 1aca63b4d54a3065fe72fe9784c91265510fbe19
+  stars: 13584
+  open_issues: 50
+  license: MIT
+  source_files: 11
+  languages:
+  - typescript
+  - javascript
+- id: repo_105_sshx
+  repo: ekzhang/sshx
+  ref: dd42496be83da6a7cbb963aee54ba9402f0ddd98
+  stars: 7539
+  open_issues: 26
+  license: MIT
+  source_files: 43
+  languages:
+  - rust
+  - typescript
+  - javascript
+  - shell
+- id: repo_106_jsbridge
+  repo: happydog-intj/JsBridge
+  ref: 78291ba35bb28137e8454e3fad5e16ee0a487d21
+  stars: 9910
+  open_issues: 145
+  license: null
+  source_files: 17
+  languages:
+  - java
+  - javascript
+- id: repo_107_markup
+  repo: github/markup
+  ref: 2abe5966d4a28f445bd80ec1f18a94b552821ea4
+  stars: 6036
+  open_issues: 23
+  license: MIT
+  source_files: 14
+  languages:
+  - ruby
+  - shell
+- id: repo_108_chatterbox
+  repo: resemble-ai/chatterbox
+  ref: 65b18437192794391a0308a8f705b1e33e633948
+  stars: 25496
+  open_issues: 352
+  license: MIT
+  source_files: 58
+  languages:
+  - python
+- id: repo_109_duf
+  repo: muesli/duf
+  ref: 4636deb4a7b707a9f04c602db033f9837e50b3f6
+  stars: 15192
+  open_issues: 79
+  license: NOASSERTION
+  source_files: 19
+  languages:
+  - go
+- id: repo_110_flv_js
+  repo: bilibili/flv.js
+  ref: 42343088f22619cf014a057b3878fe3d320016a6
+  stars: 23203
+  open_issues: 449
+  license: Apache-2.0
+  source_files: 44
+  languages:
+  - javascript
+  - typescript
+- id: repo_111_sd
+  repo: chmln/sd
+  ref: 44febdf86343c653255ae4f20f5e1882dad6be17
+  stars: 7251
+  open_issues: 70
+  license: MIT
+  source_files: 13
+  languages:
+  - rust
+- id: repo_112_spring_boot_api_project_seed
+  repo: lihengming/spring-boot-api-project-seed
+  ref: c305af6a6bb2b698b02d731ac27218bff51c5c1c
+  stars: 9703
+  open_issues: 112
+  license: null
+  source_files: 13
+  languages:
+  - java
+- id: repo_113_wayback_machine_downloader
+  repo: hartator/wayback-machine-downloader
+  ref: 653b94ba128cd209d0d4b345e4bff6e714e833fc
+  stars: 5904
+  open_issues: 198
+  license: NOASSERTION
+  source_files: 5
+  languages:
+  - ruby
+- id: repo_114_mingpt
+  repo: karpathy/minGPT
+  ref: 37baab71b9abea1b76ab957409a1cc2fbfba8a26
+  stars: 24693
+  open_issues: 84
+  license: MIT
+  source_files: 9
+  languages:
+  - python
+- id: repo_115_goquery
+  repo: PuerkitoBio/goquery
+  ref: a81d5bb195eb9685b398c46c8b75beb75280cd96
+  stars: 14970
+  open_issues: 15
+  license: BSD-3-Clause
+  source_files: 30
+  languages:
+  - go
+- id: repo_116_js_cookie
+  repo: js-cookie/js-cookie
+  ref: 35f9e8a56a62c2b164e9ff7da7bae63d19dfa08c
+  stars: 22600
+  open_issues: 8
+  license: MIT
+  source_files: 19
+  languages:
+  - javascript
+- id: repo_117_boringtun
+  repo: cloudflare/boringtun
+  ref: 6dcc889a95ad82400932f785d874421d70308195
+  stars: 7137
+  open_issues: 106
+  license: BSD-3-Clause
+  source_files: 31
+  languages:
+  - rust
+  - c
+- id: repo_118_httparty
+  repo: jnunemaker/httparty
+  ref: 2daba91bf3f61de2676a2e906f4d3181ebadea83
+  stars: 5894
+  open_issues: 45
+  license: MIT
+  source_files: 75
+  languages:
+  - ruby
+  - shell
