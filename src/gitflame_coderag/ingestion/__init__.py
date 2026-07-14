@@ -2,6 +2,7 @@ from gitflame_coderag.ingestion.files import (
     build_file_metadata,
     detect_language,
     filter_files_by_config,
+    is_test_path,
     load_repository_files,
 )
 from gitflame_coderag.ingestion.github import (
@@ -25,6 +26,7 @@ __all__ = [
     "discover_repositories",
     "fetch_repository",
     "filter_files_by_config",
+    "is_test_path",
     "load_issues",
     "load_manifest",
     "load_repository_files",

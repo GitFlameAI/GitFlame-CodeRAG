@@ -9,7 +9,7 @@ from __future__ import annotations
 import hashlib
 import re
 from functools import lru_cache
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from gitflame_coderag.schemas import AIConfig, FileMetadata, RepositoryFile
 
@@ -59,6 +59,36 @@ CONFIG_EXTENSIONS = {".yml", ".yaml", ".toml", ".ini", ".cfg"}
 DOC_EXTENSIONS = {".md", ".mdx", ".rst", ".txt"}
 
 _TEST_NAME = re.compile(r"(^|[._-])(test|tests|spec)([._-]|$)")
+
+# CamelCase test conventions the snake/kebab pattern above cannot see: "DefaultSearchContextTests",
+# "SearchServiceTest", "SimpleSearchIT". Matched against the original-case stem, so "latest.py" and
+# "audit.java" stay non-test.
+_TEST_SUFFIX = re.compile(r"[a-z0-9](Test|Tests|TestCase|IT|ITCase)$")
+
+# Directory conventions for test source sets. Exact names, plus the Gradle/Maven camelCase form
+# ("internalClusterTest", "javaRestTest", "yamlRestTest") — again original-case, so a package
+# directory named "latest" is not a test root.
+_TEST_DIRS = frozenset({"test", "tests", "spec", "specs", "qa", "testing"})
+_TEST_DIR_SUFFIX = re.compile(r"[a-z0-9](Test|Tests)$")
+
+
+def is_test_path(path: str) -> bool:
+    """Whether a repository-relative path belongs to a test source set.
+
+    Test files are the single biggest source of retrieval noise on an issue-to-code
+    benchmark: they restate the symptom and the symbol names of the bug they cover,
+    so they outrank the source file that must actually be changed. Both the GitHub
+    file selector and :func:`build_file_metadata` classify with this one rule.
+    """
+    repo_path = path.replace("\\", "/")
+    segments = repo_path.split("/")
+    stem = PurePosixPath(repo_path).stem
+    if _TEST_NAME.search(stem.lower()) or _TEST_SUFFIX.search(stem):
+        return True
+    return any(
+        segment.lower() in _TEST_DIRS or _TEST_DIR_SUFFIX.search(segment)
+        for segment in segments[:-1]
+    )
 
 
 def detect_language(path: Path, content: str) -> str:
@@ -113,7 +143,7 @@ def build_file_metadata(
         size_bytes=len(encoded),
         line_count=len(content.splitlines()),
         content_hash=digest,
-        is_test=bool(_TEST_NAME.search(path.stem.lower())) or "/test" in f"/{lowered}",
+        is_test=is_test_path(repo_path),
         is_config=name in CONFIG_NAMES or suffix in CONFIG_EXTENSIONS,
         is_docs=suffix in DOC_EXTENSIONS or "/docs/" in f"/{lowered}/",
     )

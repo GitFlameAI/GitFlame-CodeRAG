@@ -37,6 +37,13 @@ from gitflame_coderag.retrieval.evidence import (
     build_evidence_scores,
     build_source_signals,
 )
+from gitflame_coderag.retrieval.file_level import (
+    FileCandidate,
+    FileIndex,
+    build_file_index,
+    expand_by_references,
+    file_search,
+)
 from gitflame_coderag.retrieval.metrics import (
     compute_average_precision_at_k,
     compute_map_ndcg,
@@ -51,6 +58,8 @@ __all__ = [
     "AstIndex",
     "BM25Index",
     "DenseIndex",
+    "FileCandidate",
+    "FileIndex",
     "RerankerCase",
     "ast_candidate_search",
     "ast_search_index",
@@ -62,7 +71,10 @@ __all__ = [
     "build_dense_index",
     "build_evidence_chunks",
     "build_evidence_scores",
+    "build_file_index",
     "dense_index_from_matrix",
+    "expand_by_references",
+    "file_search",
     "compute_average_precision_at_k",
     "compute_map_ndcg",
     "compute_mrr",

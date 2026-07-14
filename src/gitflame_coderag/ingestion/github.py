@@ -41,10 +41,10 @@ from typing import Any
 import yaml
 
 from gitflame_coderag.ingestion.files import (
-    _TEST_NAME,
     LANGUAGES_BY_EXTENSION,
     _matches,
     detect_language,
+    is_test_path,
 )
 
 GITHUB_API_URL = "https://api.github.com"
@@ -344,18 +344,11 @@ def select_files(
             continue
         if filters.max_file_bytes and entry.size > filters.max_file_bytes:
             continue
-        if not filters.include_tests and _is_test_path(path):
+        if not filters.include_tests and is_test_path(path):
             continue
         selected.append(entry)
     # Shallow files first: a truncated selection stays close to the repository root.
     return sorted(selected, key=lambda item: (item.path.count("/"), item.path))
-
-
-def _is_test_path(path: str) -> bool:
-    """Mirror the ``is_test`` rule of ``build_file_metadata``."""
-    lowered = path.lower()
-    stem = PurePosixPath(lowered).stem
-    return bool(_TEST_NAME.search(stem)) or "/test" in f"/{lowered}"
 
 
 def _normalize_subdir(subdir: str | None) -> str:

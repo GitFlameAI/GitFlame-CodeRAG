@@ -140,6 +140,34 @@ class ExperimentConfig(ContractModel):
         return self
 
 
+class TwoStageConfig(ContractModel):
+    """Configuration for a two-stage run: rank files, then rank chunks inside them.
+
+    ``stage2`` is an ordinary :class:`ExperimentConfig`; it just sees the chunks of the
+    stage-1 candidates instead of the whole repository. The fields here are the knobs
+    that only exist because retrieval happens in two passes.
+    """
+
+    name: str
+
+    file_top_n: int = Field(default=100, ge=1)
+    """Files kept by stage-1 BM25. This is a hard cut: a file outside it can never be
+    retrieved, so ``file_top_n`` is the ceiling on the whole pipeline's recall."""
+
+    expand_references: int = Field(default=0, ge=0)
+    """Extra files pulled in because a stage-1 hit names their symbol (0 disables)."""
+
+    exclude_tests: bool = True
+    """Drop test files from the stage-1 index. They restate the bug they cover, so they
+    outrank the source file that has to change, and they are never the expected answer."""
+
+    max_chunks_per_file: int | None = Field(default=None, ge=1)
+    """Cap on how many chunks one file may contribute to the final evidence. Without it a
+    single file can take most of ``final_top_k`` with overlapping class/method chunks."""
+
+    stage2: ExperimentConfig
+
+
 class AIConfig(ContractModel):
     version: int = 1
     include: list[str] = Field(default_factory=lambda: ["**/*"])

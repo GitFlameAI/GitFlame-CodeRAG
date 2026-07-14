@@ -13,13 +13,14 @@ from gitflame_coderag.ingestion.files import (
     build_file_metadata,
     detect_language,
     filter_files_by_config,
+    is_test_path,
     load_repository_files,
 )
 from gitflame_coderag.ingestion.issues import load_issues
 from gitflame_coderag.schemas import AIConfig
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-DATASET_ROOT = REPO_ROOT / "datasets" / "original_repositories"
+DATASET_ROOT = REPO_ROOT / "datasets" / "repositories"
 MIN_ISSUES_PER_REPO = 3
 MAX_ISSUES_PER_REPO = 7
 
@@ -82,6 +83,30 @@ def test_build_file_metadata_classifications() -> None:
     # "latest.py" must not be misread as a test file.
     normal = build_file_metadata(Path("latest.py"), "", "r", "v", relative_path="latest.py")
     assert normal.is_test is False
+
+
+@pytest.mark.parametrize(
+    ("path", "expected"),
+    [
+        # snake/kebab conventions
+        ("tests/test_posts.py", True),
+        ("app/api_test.go", True),
+        ("src/api.spec.ts", True),
+        # JVM CamelCase conventions the snake/kebab pattern cannot see
+        ("server/src/test/java/org/es/search/DefaultSearchContextTests.java", True),
+        ("server/src/main/java/org/es/SearchServiceTest.java", True),
+        ("server/src/internalClusterTest/java/org/es/SimpleSearchIT.java", True),
+        # Gradle test source sets and QA modules
+        ("docs/src/yamlRestTest/java/org/es/DocsIT.java", True),
+        ("libs/entitlement/qa/entitled-plugin/src/main/java/org/es/Plugin.java", True),
+        # production code that merely looks test-ish
+        ("server/src/main/java/org/es/search/SearchService.java", False),
+        ("app/latest.py", False),
+        ("app/audit.java", False),
+    ],
+)
+def test_is_test_path(path: str, expected: bool) -> None:
+    assert is_test_path(path) is expected
 
 
 # --------------------------------------------------------------------------- #

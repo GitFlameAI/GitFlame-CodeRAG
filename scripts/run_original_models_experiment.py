@@ -34,6 +34,10 @@ from gitflame_coderag.embeddings import (
     embed_query,
 )
 from gitflame_coderag.embeddings.service import last_encode_peak_bytes
+from gitflame_coderag.experiments.file_metrics import (
+    aggregate_metrics_by_config,
+    compute_file_level_metrics,
+)
 from gitflame_coderag.experiments.validation import (
     repository_source_root,
     validate_experiment_inputs,
@@ -640,85 +644,6 @@ def run_repository_configs(
             "chunks": len(chunks),
         },
     )
-
-
-def compute_file_level_metrics(
-    *,
-    top_k: list[EvidenceChunk],
-    expected_files: list[str],
-    k_values: tuple[int, ...],
-) -> dict[str, float]:
-    expected = {path for path in expected_files if path}
-    ranked_paths = [chunk.path for chunk in top_k]
-    metrics: dict[str, float] = {}
-    for k in k_values:
-        retrieved = ranked_paths[:k]
-        retrieved_set = set(retrieved)
-        hits = [path for path in retrieved if path in expected]
-        metrics[f"recall_at_{k}"] = (
-            len(retrieved_set & expected) / len(expected) if expected else 0.0
-        )
-        metrics[f"precision_at_{k}"] = len(hits) / k if k > 0 else 0.0
-        metrics[f"map_at_{k}"] = average_precision_at_k(retrieved, expected, k)
-    return metrics
-
-
-def average_precision_at_k(ranked_paths: list[str], expected: set[str], k: int) -> float:
-    if not expected or k <= 0:
-        return 0.0
-    hits = 0
-    precision_sum = 0.0
-    seen: set[str] = set()
-    for position, path in enumerate(ranked_paths[:k], start=1):
-        if path in seen:
-            continue
-        seen.add(path)
-        if path not in expected:
-            continue
-        hits += 1
-        precision_sum += hits / position
-    return precision_sum / min(len(expected), k)
-
-
-def aggregate_metrics(
-    issue_metrics: list[dict[str, Any]],
-    k_values: tuple[int, ...],
-) -> dict[str, Any]:
-    if not issue_metrics:
-        return {"n_issues": 0}
-    output: dict[str, Any] = {"n_issues": len(issue_metrics)}
-    metric_names = [
-        *(f"recall_at_{k}" for k in k_values),
-        *(f"precision_at_{k}" for k in k_values),
-        *(f"map_at_{k}" for k in k_values),
-    ]
-    for name in metric_names:
-        values = [float(metrics.get(name, 0.0)) for metrics in issue_metrics]
-        output[name] = sum(values) / len(values)
-
-    latencies = sorted(float(metrics["latency_sec"]) for metrics in issue_metrics)
-    output["latency_avg_sec"] = sum(latencies) / len(latencies)
-    output["latency_p50_sec"] = percentile(latencies, 0.50)
-    output["latency_p95_sec"] = percentile(latencies, 0.95)
-    output["latency_max_sec"] = max(latencies)
-    return output
-
-
-def aggregate_metrics_by_config(
-    issue_metrics_by_config: dict[str, list[dict[str, Any]]],
-    k_values: tuple[int, ...],
-) -> dict[str, Any]:
-    return {
-        config_name: aggregate_metrics(issue_metrics, k_values)
-        for config_name, issue_metrics in issue_metrics_by_config.items()
-    }
-
-
-def percentile(values: list[float], q: float) -> float:
-    if not values:
-        return 0.0
-    index = min(len(values) - 1, max(0, round((len(values) - 1) * q)))
-    return values[index]
 
 
 def evidence_chunk_to_dict(chunk: EvidenceChunk) -> dict[str, Any]:

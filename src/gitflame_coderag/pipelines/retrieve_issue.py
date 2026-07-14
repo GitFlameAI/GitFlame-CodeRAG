@@ -25,8 +25,8 @@ from gitflame_coderag.schemas import (
     ExperimentConfig,
     Issue,
     RetrievalPipelineResult,
-    RetrievalRun,
     RetrievalResult,
+    RetrievalRun,
     StructuralMetadata,
 )
 from gitflame_coderag.storage.repository import CodeRAGRepository
@@ -69,6 +69,44 @@ def run_retrieval_core(
     them once and pass them in; otherwise every call re-indexes the whole
     repository, which dominates runtime at scale.
     """
+    candidates = rank_issue_candidates(
+        issue=issue,
+        chunks=chunks,
+        metadata_by_chunk_id=metadata_by_chunk_id,
+        config=config,
+        embeddings=embeddings,
+        query_vector=query_vector,
+        reranker_model=reranker_model,
+        bm25_index=bm25_index,
+        ast_index=ast_index,
+    )
+
+    return build_evidence_chunks(
+        candidates,
+        {chunk.id: chunk for chunk in chunks},
+        top_k=config.final_top_k,
+    )
+
+
+def rank_issue_candidates(
+    issue: Issue,
+    chunks: list[CodeChunk],
+    metadata_by_chunk_id: dict[str, StructuralMetadata],
+    config: ExperimentConfig,
+    *,
+    embeddings: list[ChunkEmbedding] | DenseIndex | None = None,
+    query_vector: list[float] | None = None,
+    reranker_model: CrossEncoderLike | None = None,
+    bm25_index: BM25Index | None = None,
+    ast_index: AstIndex | None = None,
+    top_k: int | None = None,
+) -> list[RetrievalResult]:
+    """Rank chunks for ``issue`` and stop before the evidence cut.
+
+    ``top_k`` defaults to ``config.final_top_k`` — the list :func:`run_retrieval_core` turns
+    into evidence. A caller that filters the ranking afterwards (a per-file cap, say) must
+    ask for a deeper list, or the slots it frees have nothing left to refill them with.
+    """
     rankings = _collect_enabled_rankings(
         issue=issue,
         chunks=chunks,
@@ -79,18 +117,13 @@ def run_retrieval_core(
         bm25_index=bm25_index,
         ast_index=ast_index,
     )
-    candidates = _finalize_candidates(
+    return _finalize_candidates(
         issue=issue,
         chunks=chunks,
         rankings=rankings,
         config=config,
         reranker_model=reranker_model,
-    )
-
-    return build_evidence_chunks(
-        candidates,
-        {chunk.id: chunk for chunk in chunks},
-        top_k=config.final_top_k,
+        top_k=top_k if top_k is not None else config.final_top_k,
     )
 
 
@@ -219,7 +252,11 @@ def _collect_enabled_rankings(
     rankings: list[list[RetrievalResult]] = []
 
     if config.use_bm25:
-        index = bm25_index if bm25_index is not None else build_bm25_index(chunks, metadata_by_chunk_id)
+        index = (
+            bm25_index
+            if bm25_index is not None
+            else build_bm25_index(chunks, metadata_by_chunk_id)
+        )
         rankings.append(bm25_search(build_issue_query(issue), index, config.bm25_top_k))
 
     if config.use_dense:
@@ -267,17 +304,19 @@ def _finalize_candidates(
     rankings: list[list[RetrievalResult]],
     config: ExperimentConfig,
     reranker_model: CrossEncoderLike | None,
+    top_k: int | None = None,
 ) -> list[RetrievalResult]:
+    """``top_k=None`` keeps the whole ranked pool (what the DB path persists)."""
     candidates = _combine_rankings(rankings, config)
     if not (config.use_reranker and candidates):
-        return candidates
+        return candidates if top_k is None else candidates[:top_k]
 
     return rerank_candidates(
         query=build_issue_query(issue),
         candidates=candidates[: config.reranker_top_k],
         chunks_by_id={chunk.id: chunk for chunk in chunks},
         model=reranker_model,
-        top_k=config.final_top_k,
+        top_k=top_k if top_k is not None else len(candidates),
         model_name=config.reranker_model,
         device=config.reranker_device,
         batch_size=config.reranker_batch_size,
