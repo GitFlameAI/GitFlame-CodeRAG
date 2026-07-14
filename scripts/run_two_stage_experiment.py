@@ -72,27 +72,53 @@ DEFAULT_RERANKER_MODEL = "cross-encoder/ms-marco-MiniLM-L6-v2"
 DEFAULT_K_VALUES = (5, 10, 15)
 DEFAULT_STAGE1_N_VALUES = (10, 20, 50, 100, 200)
 
-# Stage-2 retriever mixes. Names mirror the single-stage matrix so the two runs line up
-# row by row; "*_capped" additionally limits how many chunks one file may contribute.
+# Stage-2 retriever mixes. The default rows are an ablation over one base, bm25_dense: RRF is
+# isolated against the two single-retriever rows, and the cross-encoder and the per-file cap
+# then vary independently over that base, so the four combinations answer "does the reranker
+# help", "does the cap help" and "do they interact" without ever moving two things at once.
+#
+# The AST retriever is not in the default set. It was the only thing separating bm25_dense
+# from full_rrf, and it cost recall@10 0.78 -> 0.65 on elasticsearch: a third ranking of the
+# same chunks, keyword-matched against structural metadata, that mostly re-sorted the fusion
+# by noise and made the reranker's own effect unreadable. This does not touch chunking, which
+# is AST-based either way -- ``use_ast`` only controls that third ranking, see
+# ``rank_issue_candidates``. The full_rrf_* rows stay registered below, so ``--configs
+# bm25_dense,full_rrf`` still measures what the AST list does to a fusion.
 DEFAULT_CONFIG_NAMES = (
     "bm25_only",
     "dense_only",
     "bm25_dense",
-    "full_rrf",
-    "full_rrf_reranker",
-    "full_rrf_reranker_capped",
+    "bm25_dense_capped",
+    "bm25_dense_reranker",
+    "bm25_dense_reranker_capped",
 )
 
 RETRIEVER_FLAGS: dict[str, dict[str, bool]] = {
     "bm25_only": dict(use_bm25=True, use_dense=False, use_ast=False, use_rrf=False),
     "dense_only": dict(use_bm25=False, use_dense=True, use_ast=False, use_rrf=False),
     "bm25_dense": dict(use_bm25=True, use_dense=True, use_ast=False, use_rrf=True),
+    "bm25_dense_capped": dict(use_bm25=True, use_dense=True, use_ast=False, use_rrf=True),
+    "bm25_dense_reranker": dict(use_bm25=True, use_dense=True, use_ast=False, use_rrf=True),
+    "bm25_dense_reranker_capped": dict(use_bm25=True, use_dense=True, use_ast=False, use_rrf=True),
     "full_rrf": dict(use_bm25=True, use_dense=True, use_ast=True, use_rrf=True),
     "full_rrf_reranker": dict(use_bm25=True, use_dense=True, use_ast=True, use_rrf=True),
     "full_rrf_reranker_capped": dict(use_bm25=True, use_dense=True, use_ast=True, use_rrf=True),
 }
-RERANKED_CONFIGS = frozenset({"full_rrf_reranker", "full_rrf_reranker_capped"})
-CAPPED_CONFIGS = frozenset({"full_rrf_reranker_capped"})
+RERANKED_CONFIGS = frozenset(
+    {
+        "bm25_dense_reranker",
+        "bm25_dense_reranker_capped",
+        "full_rrf_reranker",
+        "full_rrf_reranker_capped",
+    }
+)
+CAPPED_CONFIGS = frozenset(
+    {
+        "bm25_dense_capped",
+        "bm25_dense_reranker_capped",
+        "full_rrf_reranker_capped",
+    }
+)
 
 
 @dataclass
@@ -884,11 +910,25 @@ def build_experimental_pipeline(args: argparse.Namespace) -> dict[str, Any]:
         else ""
     )
     tests = "tests excluded" if args.exclude_tests else "tests included"
+    # Read the ranking stages off the matrix rather than restating them, so this description
+    # cannot drift from the configs the run actually executed (the AST retriever, for one, is
+    # no longer in the default ladder). Which row uses what is in config.configs.
+    configs = make_two_stage_configs(args)
+    retrievers = enabled_labels(
+        (("BM25", [config.stage2.use_bm25 for config in configs])),
+        (("dense", [config.stage2.use_dense for config in configs])),
+        (("AST", [config.stage2.use_ast for config in configs])),
+    )
+    rankers = enabled_labels(
+        (("RRF", [config.stage2.use_rrf for config in configs])),
+        (("cross-encoder", [config.stage2.use_reranker for config in configs])),
+        (("per-file cap", [bool(config.max_chunks_per_file) for config in configs])),
+    )
     return {
         "stage1": (f"BM25 over whole files ({tests}) -> top {args.file_top_n} files{expansion}"),
         "stage2": (
-            "chunk + embed only the candidate files -> BM25/dense/AST -> RRF -> "
-            "cross-encoder -> optional per-file cap -> top-k chunks"
+            "AST-chunk + embed only the candidate files -> "
+            f"{'/'.join(retrievers)} -> {' -> '.join(rankers)} -> top-k chunks"
         ),
         "metrics": ["recall_at_k", "precision_at_k", "map_at_k", "files_at_k", "latency_sec"],
         "relevance": {
@@ -897,6 +937,11 @@ def build_experimental_pipeline(args: argparse.Namespace) -> dict[str, Any]:
             "rule": "An evidence chunk is relevant when its path is listed in expected_files.",
         },
     }
+
+
+def enabled_labels(*candidates: tuple[str, list[bool]]) -> list[str]:
+    """Keep the labels at least one config in the matrix turns on."""
+    return [label for label, flags in candidates if any(flags)]
 
 
 def package_versions(names: list[str]) -> dict[str, str | None]:
