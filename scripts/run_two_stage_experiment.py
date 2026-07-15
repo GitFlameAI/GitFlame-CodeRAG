@@ -840,6 +840,13 @@ def parse_args() -> argparse.Namespace:
         "same as before it existed.",
     )
     parser.add_argument("--reranker-model", default=DEFAULT_RERANKER_MODEL)
+    parser.add_argument(
+        "--no-reranker",
+        action="store_true",
+        help="Run without the cross-encoder reranker: drop the *_reranker configs so the "
+        "reranker model is never loaded and its smoke test is skipped. Handy for a quick "
+        "pass or a machine without the reranker weights / GPU.",
+    )
     parser.add_argument("--reranker-device", default="cuda")
     parser.add_argument("--reranker-batch-size", type=int, default=16)
     # Sized so the reranker's own token window, not this character cut, truncates a chunk.
@@ -862,6 +869,10 @@ def parse_args() -> argparse.Namespace:
     unknown = sorted(set(args.configs) - set(RETRIEVER_FLAGS))
     if unknown:
         parser.error(f"unknown configs: {', '.join(unknown)}")
+    if args.no_reranker:
+        args.configs = tuple(name for name in args.configs if name not in RERANKED_CONFIGS)
+        if not args.configs:
+            parser.error("--no-reranker removed every requested config; pick non-reranker configs")
     return args
 
 
