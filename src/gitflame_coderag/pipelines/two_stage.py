@@ -37,6 +37,7 @@ from gitflame_coderag.retrieval.file_level import (
     expand_by_references,
     file_search,
 )
+from gitflame_coderag.retrieval.selection import ContextSelectionStats, select_context_results
 from gitflame_coderag.schemas import (
     AIConfig,
     CodeChunk,
@@ -77,6 +78,7 @@ class TwoStageResult:
     evidence: EvidenceBuildResult
     stage1_candidates: list[FileCandidate]
     n_candidate_chunks: int
+    context_selection: ContextSelectionStats
     timings: dict[str, float] = field(default_factory=dict)
 
     @property
@@ -118,6 +120,12 @@ def run_two_stage_retrieval(
             evidence=EvidenceBuildResult(evidence_chunks=[]),
             stage1_candidates=[],
             n_candidate_chunks=0,
+            context_selection=ContextSelectionStats(
+                candidate_count=0,
+                selected_count=0,
+                selected_file_count=0,
+                selected_tokens=0,
+            ),
             timings=timings,
         )
 
@@ -158,14 +166,24 @@ def run_two_stage_retrieval(
     timings["stage2_sec"] = perf_counter() - started
 
     chunks_by_id = {chunk.id: chunk for chunk in chunks}
-    if config.max_chunks_per_file is not None:
-        ranked = cap_chunks_per_file(ranked, chunks_by_id, cap=config.max_chunks_per_file)
+    selection = select_context_results(
+        ranked,
+        chunks_by_id,
+        max_chunks=stage2.final_top_k,
+        min_relevance_score=config.min_relevance_score,
+        max_files=config.max_context_files,
+        max_chunks_per_file=config.max_chunks_per_file,
+        max_tokens=config.max_context_tokens,
+        deduplicate_overlaps=config.deduplicate_overlaps,
+        overlap_threshold=config.overlap_threshold,
+    )
 
     return TwoStageResult(
-        evidence=build_evidence_chunks(ranked, chunks_by_id, top_k=stage2.final_top_k),
+        evidence=build_evidence_chunks(selection.results, chunks_by_id),
         stage1_candidates=candidates,
         n_candidate_chunks=len(chunks),
         timings=timings,
+        context_selection=selection.stats,
     )
 
 
@@ -197,15 +215,9 @@ def cap_chunks_per_file(
     ten chunks of one file, all correct and all redundant, while the second file the issue
     touches never appears. Capping frees those slots for the next file down.
     """
-    kept: list[RetrievalResult] = []
-    per_file: dict[str, int] = {}
-    for result in results:
-        chunk = chunks_by_id.get(result.chunk_id)
-        if chunk is None:
-            continue
-        seen = per_file.get(chunk.path, 0)
-        if seen >= cap:
-            continue
-        per_file[chunk.path] = seen + 1
-        kept.append(result.model_copy(update={"rank": len(kept) + 1}))
-    return kept
+    return select_context_results(
+        results,
+        chunks_by_id,
+        max_chunks=len(results) or 1,
+        max_chunks_per_file=cap,
+    ).results

@@ -165,6 +165,22 @@ class TwoStageConfig(ContractModel):
     """Cap on how many chunks one file may contribute to the final evidence. Without it a
     single file can take most of ``final_top_k`` with overlapping class/method chunks."""
 
+    min_relevance_score: float | None = None
+    """Optional gate on the final retrieval score. Keep disabled until the configured
+    score type has been calibrated; RRF scores are rank-fusion values, not probabilities."""
+
+    max_context_files: int | None = Field(default=None, ge=1)
+    """Maximum number of distinct files allowed in final model evidence."""
+
+    max_context_tokens: int | None = Field(default=None, ge=1)
+    """Strict token-estimate budget for final model evidence."""
+
+    deduplicate_overlaps: bool = False
+    """Drop lower-ranked chunks from the same file when their line ranges mostly overlap."""
+
+    overlap_threshold: float = Field(default=0.8, gt=0.0, le=1.0)
+    """Overlap ratio, relative to the shorter chunk, used by overlap deduplication."""
+
     stage2: ExperimentConfig
 
 
