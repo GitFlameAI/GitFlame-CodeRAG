@@ -56,6 +56,23 @@ class CodeRAGRepository:
                 },
             )
 
+    def load_latest_repository_revision(self, repository_id: str) -> str | None:
+        """Resolve the indexed revision when Agent Engine did not supply a commit SHA."""
+        with self.engine.connect() as connection:
+            value = connection.execute(
+                text(
+                    """
+                    SELECT revision
+                    FROM repositories
+                    WHERE id = :repository_id
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                    """
+                ),
+                {"repository_id": repository_id},
+            ).scalar_one_or_none()
+        return str(value) if value is not None else None
+
     def save_file_metadata(self, metadata: FileMetadata, *, raw_content: str) -> None:
         with self.engine.begin() as connection:
             connection.execute(
