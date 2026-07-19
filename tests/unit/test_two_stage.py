@@ -46,11 +46,21 @@ ISSUE = Issue(
 )
 
 
-def make_config(*, file_top_n: int, max_chunks_per_file: int | None = None) -> TwoStageConfig:
+def make_config(
+    *,
+    file_top_n: int,
+    max_chunks_per_file: int | None = None,
+    min_relevance_score: float | None = None,
+    max_context_files: int | None = None,
+    max_context_tokens: int | None = None,
+) -> TwoStageConfig:
     return TwoStageConfig(
         name="bm25_only",
         file_top_n=file_top_n,
         max_chunks_per_file=max_chunks_per_file,
+        min_relevance_score=min_relevance_score,
+        max_context_files=max_context_files,
+        max_context_tokens=max_context_tokens,
         stage2=ExperimentConfig(
             name="bm25_only",
             use_bm25=True,
@@ -110,3 +120,17 @@ def test_per_file_cap_limits_one_file_to_its_share_of_the_evidence() -> None:
 
     per_file = [chunk.path for chunk in capped.evidence.evidence_chunks]
     assert len(per_file) == len(set(per_file))
+
+
+def test_two_stage_exposes_context_selection_stats() -> None:
+    result = run(make_config(file_top_n=3, max_context_files=1))
+
+    assert result.context_selection.selected_count == len(result.evidence.evidence_chunks)
+    assert result.context_selection.selected_file_count == 1
+
+
+def test_score_gate_can_abstain_instead_of_forcing_top_k() -> None:
+    result = run(make_config(file_top_n=3, min_relevance_score=10_000.0))
+
+    assert result.evidence.evidence_chunks == []
+    assert result.context_selection.below_score > 0

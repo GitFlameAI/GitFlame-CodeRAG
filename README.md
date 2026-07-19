@@ -120,6 +120,22 @@ The default models are:
 | `jinaai/jina-embeddings-v2-base-code` | Code embedding model |
 | `BAAI/bge-reranker-v2-m3` | Cross-encoder reranker |
 
+## Context Selection
+
+Two-stage retrieval can apply an optional deterministic context policy after final
+ranking and before evidence is handed to an LLM. `TwoStageConfig` supports:
+
+- `min_relevance_score` to abstain instead of forcing weak results into a fixed top-k;
+- `max_context_files` and `max_context_tokens` as hard prompt budgets;
+- `max_chunks_per_file` to prevent one file from dominating the evidence;
+- optional overlap deduplication for near-identical line ranges.
+
+`stage2.final_top_k` remains the maximum chunk count. New policy fields are disabled
+by default so historical experiment configurations remain reproducible. Do not treat
+an RRF score as a probability: calibrate the active final score before enabling an
+absolute relevance threshold. Every two-stage result includes context-selection
+statistics with selected file/chunk/token counts and drop reasons.
+
 ## Results
 
 The final experiment summary is in `experiments/README.md`.
