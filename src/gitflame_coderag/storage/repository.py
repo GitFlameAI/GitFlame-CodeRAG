@@ -56,6 +56,218 @@ class CodeRAGRepository:
                 },
             )
 
+    def load_latest_repository_revision(self, repository_id: str) -> str | None:
+        """Resolve the indexed revision when Agent Engine did not supply a commit SHA."""
+        with self.engine.connect() as connection:
+            value = connection.execute(
+                text(
+                    """
+                    SELECT revision
+                    FROM repositories
+                    WHERE id = :repository_id
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                    """
+                ),
+                {"repository_id": repository_id},
+            ).scalar_one_or_none()
+        return str(value) if value is not None else None
+
+    def repository_index_status(
+        self,
+        repository_id: str,
+        revision: str,
+        *,
+        embedding_model: str | None,
+    ) -> tuple[bool, int, int, int]:
+        """Return whether a complete index for the requested revision is active."""
+        with self.engine.connect() as connection:
+            row = (
+                connection.execute(
+                    text(
+                        """
+                        SELECT
+                            r.revision,
+                            COUNT(DISTINCT f.id) AS file_count,
+                            COUNT(DISTINCT c.id) AS chunk_count,
+                            COUNT(DISTINCT e.chunk_id) AS embedding_count
+                        FROM repositories AS r
+                        LEFT JOIN repository_files AS f
+                          ON f.repository_id = r.id AND f.revision = r.revision
+                        LEFT JOIN code_chunks AS c ON c.file_id = f.id
+                        LEFT JOIN chunk_embeddings AS e
+                          ON e.chunk_id = c.id
+                         AND (
+                            CAST(:embedding_model AS text) IS NULL
+                            OR e.embedding_model = CAST(:embedding_model AS text)
+                         )
+                        WHERE r.id = :repository_id
+                        GROUP BY r.id, r.revision
+                        """
+                    ),
+                    {"repository_id": repository_id, "embedding_model": embedding_model},
+                )
+                .mappings()
+                .first()
+            )
+        if row is None:
+            return False, 0, 0, 0
+        file_count = int(row["file_count"] or 0)
+        chunk_count = int(row["chunk_count"] or 0)
+        embedding_count = int(row["embedding_count"] or 0)
+        complete = (
+            str(row["revision"]) == revision
+            and file_count > 0
+            and chunk_count > 0
+            and (embedding_model is None or embedding_count >= chunk_count)
+        )
+        return complete, file_count, chunk_count, embedding_count
+
+    def replace_repository_index(
+        self,
+        repository: Repository,
+        files: list[RepositoryFile],
+        chunks: list[CodeChunk],
+        metadata: dict[str, StructuralMetadata],
+        keywords: dict[str, ChunkKeywords],
+        search_texts: dict[str, ChunkSearchTexts],
+        embeddings: list[ChunkEmbedding],
+    ) -> None:
+        """Atomically replace a repository's active index with one revision."""
+        with self.engine.begin() as connection:
+            connection.execute(
+                text(
+                    """
+                    INSERT INTO repositories (id, name, source, revision, root_path, created_at)
+                    VALUES (:id, :name, :source, :revision, :root_path, :created_at)
+                    ON CONFLICT (id) DO UPDATE SET
+                        name = EXCLUDED.name,
+                        source = EXCLUDED.source,
+                        revision = EXCLUDED.revision,
+                        root_path = EXCLUDED.root_path,
+                        created_at = EXCLUDED.created_at
+                    """
+                ),
+                repository.model_dump(),
+            )
+            # Cascading FKs remove chunks and every derived search artifact. The
+            # transaction keeps the previous index visible until replacement commits.
+            connection.execute(
+                text("DELETE FROM repository_files WHERE repository_id = :repository_id"),
+                {"repository_id": repository.id},
+            )
+            connection.execute(
+                text(
+                    """
+                    INSERT INTO repository_files (
+                        id, repository_id, revision, path, language, extension,
+                        size_bytes, line_count, content_hash, raw_content,
+                        is_test, is_config, is_docs
+                    ) VALUES (
+                        :id, :repository_id, :revision, :path, :language, :extension,
+                        :size_bytes, :line_count, :content_hash, :raw_content,
+                        :is_test, :is_config, :is_docs
+                    )
+                    """
+                ),
+                [{**file.metadata.model_dump(), "raw_content": file.raw_content} for file in files],
+            )
+            connection.execute(
+                text(
+                    """
+                    INSERT INTO code_chunks (
+                        id, parent_chunk_id, split_index, split_count,
+                        repository_id, file_id, path, language, chunk_type,
+                        node_type, symbol_name, parent_symbol, start_line, end_line,
+                        content, content_hash, token_count
+                    ) VALUES (
+                        :id, :parent_chunk_id, :split_index, :split_count,
+                        :repository_id, :file_id, :path, :language, :chunk_type,
+                        :node_type, :symbol_name, :parent_symbol, :start_line, :end_line,
+                        :content, :content_hash, :token_count
+                    )
+                    """
+                ),
+                [chunk.model_dump() for chunk in chunks],
+            )
+            connection.execute(
+                text(
+                    """
+                    INSERT INTO chunk_structural_metadata (
+                        chunk_id, imports, calls, defined_symbols, referenced_symbols, flags
+                    ) VALUES (
+                        :chunk_id, CAST(:imports AS jsonb), CAST(:calls AS jsonb),
+                        CAST(:defined_symbols AS jsonb), CAST(:referenced_symbols AS jsonb),
+                        CAST(:flags AS jsonb)
+                    )
+                    """
+                ),
+                [
+                    {
+                        "chunk_id": value.chunk_id,
+                        "imports": json.dumps(value.imports),
+                        "calls": json.dumps(value.calls),
+                        "defined_symbols": json.dumps(value.defined_symbols),
+                        "referenced_symbols": json.dumps(value.referenced_symbols),
+                        "flags": json.dumps(value.flags),
+                    }
+                    for value in metadata.values()
+                ],
+            )
+            connection.execute(
+                text(
+                    """
+                    INSERT INTO chunk_search_texts (chunk_id, bm25_text, embedding_text)
+                    VALUES (:chunk_id, :bm25_text, :embedding_text)
+                    """
+                ),
+                [value.model_dump() for value in search_texts.values()],
+            )
+            connection.execute(
+                text(
+                    """
+                    INSERT INTO chunk_keywords (
+                        chunk_id, identifiers, identifier_tokens, string_literals,
+                        comments_terms, path_tokens
+                    ) VALUES (
+                        :chunk_id, CAST(:identifiers AS jsonb),
+                        CAST(:identifier_tokens AS jsonb), CAST(:string_literals AS jsonb),
+                        CAST(:comments_terms AS jsonb), CAST(:path_tokens AS jsonb)
+                    )
+                    """
+                ),
+                [
+                    {
+                        "chunk_id": value.chunk_id,
+                        "identifiers": json.dumps(value.identifiers),
+                        "identifier_tokens": json.dumps(value.identifier_tokens),
+                        "string_literals": json.dumps(value.string_literals),
+                        "comments_terms": json.dumps(value.comments_terms),
+                        "path_tokens": json.dumps(value.path_tokens),
+                    }
+                    for value in keywords.values()
+                ],
+            )
+            if embeddings:
+                connection.execute(
+                    text(
+                        """
+                        INSERT INTO chunk_embeddings (
+                            chunk_id, embedding_model, embedding, created_at
+                        ) VALUES (:chunk_id, :embedding_model, :embedding, :created_at)
+                        """
+                    ),
+                    [
+                        {
+                            "chunk_id": value.chunk_id,
+                            "embedding_model": value.embedding_model,
+                            "embedding": value.vector,
+                            "created_at": value.created_at,
+                        }
+                        for value in embeddings
+                    ],
+                )
+
     def save_file_metadata(self, metadata: FileMetadata, *, raw_content: str) -> None:
         with self.engine.begin() as connection:
             connection.execute(
@@ -1030,6 +1242,8 @@ def _row_to_chunk_embedding(row: Any) -> ChunkEmbedding:
 
 
 def _coerce_vector(value: Any) -> list[float]:
+    if hasattr(value, "to_list"):
+        value = value.to_list()
     if hasattr(value, "tolist"):
         value = value.tolist()
     if isinstance(value, str):

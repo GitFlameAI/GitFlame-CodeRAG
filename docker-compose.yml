@@ -16,6 +16,32 @@ services:
       timeout: 5s
       retries: 10
 
+  rag-service:
+    build: .
+    environment:
+      DATABASE_URL: postgresql+psycopg://gitflame:gitflame@database:5432/gitflame_coderag
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-jinaai/jina-embeddings-v2-base-code}
+      RAG_API_KEY: ${RAG_API_KEY:-}
+      RAG_USE_DENSE: ${RAG_USE_DENSE:-true}
+      RAG_MAX_CONTEXT_FILES: ${RAG_MAX_CONTEXT_FILES:-20}
+      RAG_MAX_CHUNKS_PER_FILE: ${RAG_MAX_CHUNKS_PER_FILE:-3}
+      RAG_MAX_CONTEXT_TOKENS: ${RAG_MAX_CONTEXT_TOKENS:-12000}
+    ports:
+      - "${RAG_PORT:-8004}:8004"
+    depends_on:
+      database:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8004/health')",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
 volumes:
   coderag-postgres:
-
