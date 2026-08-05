@@ -56,6 +56,53 @@ class SearchResponse(ApiModel):
     results: list[SearchResult]
 
 
+class IndexFile(ApiModel):
+    path: str = Field(min_length=1, max_length=500)
+    content: str = Field(max_length=500_000)
+
+    @field_validator("path")
+    @classmethod
+    def path_must_be_repository_relative(cls, value: str) -> str:
+        normalized = value.strip().replace("\\", "/").removeprefix("./")
+        parts = normalized.split("/")
+        if not normalized or normalized.startswith("/") or any(
+            part in {"", ".", ".."} for part in parts
+        ):
+            raise ValueError("path must be a safe repository-relative path")
+        return normalized
+
+
+class IndexRequest(ApiModel):
+    repository_id: str = Field(min_length=1, max_length=200)
+    repository_name: str = Field(default="", max_length=200)
+    commit_sha: str = Field(min_length=1, max_length=200)
+    source: str | None = Field(default=None, max_length=2_000)
+    configuration_yaml: str = Field(default="", max_length=1_000_000)
+    files: list[IndexFile] = Field(min_length=1, max_length=2_000)
+    force: bool = False
+
+    @field_validator("repository_id", "commit_sha")
+    @classmethod
+    def identifiers_must_not_be_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("identifier cannot be blank")
+        return value
+
+
+class IndexStatusResponse(ApiModel):
+    repository_id: str
+    commit_sha: str
+    status: str
+    file_count: int = Field(ge=0)
+    chunk_count: int = Field(ge=0)
+    embedding_count: int = Field(ge=0)
+
+
+class IndexResponse(IndexStatusResponse):
+    status: str = "indexed"
+
+
 class HealthResponse(ApiModel):
     status: str
     database: str
