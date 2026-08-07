@@ -5,6 +5,7 @@ from gitflame_coderag.embeddings.cache import (
 )
 from gitflame_coderag.embeddings.service import (
     DEFAULT_EMBEDDING_MODEL,
+    EmbeddingCancelledError,
     LIGHTWEIGHT_BASELINE_MODEL,
     build_embedding_text,
     describe_embedding_backend,
@@ -17,6 +18,7 @@ from gitflame_coderag.embeddings.service import (
 
 __all__ = [
     "DEFAULT_EMBEDDING_MODEL",
+    "EmbeddingCancelledError",
     "LIGHTWEIGHT_BASELINE_MODEL",
     "build_embedding_text",
     "cache_path",

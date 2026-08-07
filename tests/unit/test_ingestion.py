@@ -13,6 +13,7 @@ from gitflame_coderag.ingestion.files import (
     build_file_metadata,
     detect_language,
     filter_files_by_config,
+    is_indexable_text_file,
     is_test_path,
     load_repository_files,
 )
@@ -146,6 +147,20 @@ def test_filter_files_by_config_include_exclude() -> None:
     config = AIConfig(include=["app/**"], exclude=["node_modules/**", "dist/**"])
     kept = {f.metadata.path for f in filter_files_by_config(files, config)}
     assert kept == {"app/main.py", "app/util.py"}
+
+
+@pytest.mark.parametrize(
+    ("path", "content", "expected"),
+    [
+        ("src/main.py", "print('ok')\n", True),
+        ("docs/readme.txt", "plain text", True),
+        ("screenshots/proof.png", "otherwise valid unicode", False),
+        ("data/unknown.dat", "prefix\x00suffix", False),
+        ("data/corrupt.dat", "\ufffd" * 20 + "text", False),
+    ],
+)
+def test_is_indexable_text_file(path: str, content: str, expected: bool) -> None:
+    assert is_indexable_text_file(path, content) is expected
 
 
 # --------------------------------------------------------------------------- #

@@ -1,6 +1,9 @@
+import pytest
+
 from gitflame_coderag.embeddings import service
 from gitflame_coderag.embeddings.service import (
     DEFAULT_EMBEDDING_MODEL,
+    EmbeddingCancelledError,
     LIGHTWEIGHT_BASELINE_MODEL,
     build_embedding_text,
     embed_chunks,
@@ -89,3 +92,25 @@ def test_embed_chunks_returns_schema_embeddings(monkeypatch) -> None:
     assert embeddings[0].chunk_id == "chunk-1"
     assert embeddings[0].embedding_model == DEFAULT_EMBEDDING_MODEL
     assert embeddings[0].vector == [1.0, 0.0]
+
+
+def test_encode_matrix_stops_after_current_batch_when_cancelled(monkeypatch) -> None:
+    calls = 0
+
+    def cancelled() -> bool:
+        nonlocal calls
+        calls += 1
+        return calls >= 4
+
+    monkeypatch.setattr(service, "_load_model", lambda _name: object())
+    monkeypatch.setattr(service, "_token_lengths", lambda _model, _texts: [1])
+    monkeypatch.setattr(service, "_num_attention_heads", lambda _model: 1)
+    monkeypatch.setattr(service, "_available_attention_budget", lambda: 1024)
+    monkeypatch.setattr(
+        service,
+        "_encode_batch",
+        lambda _model, _texts, normalize_vectors: (service.np.asarray([[1.0]]), 0),
+    )
+
+    with pytest.raises(EmbeddingCancelledError, match="cancelled"):
+        service._encode_matrix(["content"], cancellation_callback=cancelled)

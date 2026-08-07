@@ -58,6 +58,15 @@ CONFIG_NAMES = {"dockerfile", "makefile", "pyproject.toml", "package.json"}
 CONFIG_EXTENSIONS = {".yml", ".yaml", ".toml", ".ini", ".cfg"}
 DOC_EXTENSIONS = {".md", ".mdx", ".rst", ".txt"}
 
+BINARY_EXTENSIONS = {
+    ".7z", ".avi", ".bin", ".bmp", ".bz2", ".class", ".db", ".dll", ".dmg",
+    ".doc", ".docx", ".eot", ".exe", ".gif", ".gz", ".ico", ".jar", ".jpeg",
+    ".jpg", ".lockb", ".mov", ".mp3", ".mp4", ".npy", ".npz", ".otf",
+    ".parquet", ".pdf", ".pickle", ".pkl", ".png", ".ppt", ".pptx", ".pyc",
+    ".so", ".sqlite", ".sqlite3", ".tar", ".tiff", ".ttf", ".wav", ".webm",
+    ".webp", ".woff", ".woff2", ".xls", ".xlsx", ".xz", ".zip",
+}
+
 _TEST_NAME = re.compile(r"(^|[._-])(test|tests|spec)([._-]|$)")
 
 # CamelCase test conventions the snake/kebab pattern above cannot see: "DefaultSearchContextTests",
@@ -111,6 +120,17 @@ def detect_language(path: Path, content: str) -> str:
             return SHEBANG_LANGUAGES[token]
 
     return "unknown"
+
+
+def is_indexable_text_file(path: str, content: str) -> bool:
+    """Reject known binary formats and content that cannot safely be chunked as text."""
+    if PurePosixPath(path).suffix.lower() in BINARY_EXTENSIONS:
+        return False
+    if "\x00" in content:
+        return False
+    # Go's JSON encoder replaces invalid UTF-8 bytes with U+FFFD. A few replacement
+    # characters can be legitimate, but a binary payload contains them densely.
+    return not content or content.count("\ufffd") / len(content) < 0.01
 
 
 def build_file_metadata(

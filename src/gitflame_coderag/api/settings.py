@@ -45,6 +45,8 @@ class ApiSettings:
     max_context_tokens: int | None = 12_000
     deduplicate_overlaps: bool = True
     overlap_threshold: float = 0.8
+    max_index_file_bytes: int = 500_000
+    max_index_payload_bytes: int = 20_000_000
 
     @classmethod
     def from_env(cls) -> ApiSettings:
@@ -65,6 +67,8 @@ class ApiSettings:
             max_context_tokens=_optional_int("RAG_MAX_CONTEXT_TOKENS", 12_000),
             deduplicate_overlaps=_boolean("RAG_DEDUPLICATE_OVERLAPS", True),
             overlap_threshold=float(os.getenv("RAG_OVERLAP_THRESHOLD", "0.8")),
+            max_index_file_bytes=int(os.getenv("RAG_MAX_INDEX_FILE_BYTES", "500000")),
+            max_index_payload_bytes=int(os.getenv("RAG_MAX_INDEX_PAYLOAD_BYTES", "20000000")),
         )
         settings.validate()
         return settings
@@ -76,6 +80,8 @@ class ApiSettings:
             ("max_context_files", self.max_context_files),
             ("max_chunks_per_file", self.max_chunks_per_file),
             ("max_context_tokens", self.max_context_tokens),
+            ("max_index_file_bytes", self.max_index_file_bytes),
+            ("max_index_payload_bytes", self.max_index_payload_bytes),
         ):
             if value is not None and value < 1:
                 raise ValueError(f"{name} must be at least 1")

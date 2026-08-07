@@ -19,6 +19,10 @@ from gitflame_coderag.schemas import (
 DEFAULT_EMBEDDING_MODEL = "jinaai/jina-embeddings-v2-base-code"
 LIGHTWEIGHT_BASELINE_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 
+
+class EmbeddingCancelledError(RuntimeError):
+    """Raised between batches when the caller no longer needs the embeddings."""
+
 _IDENTIFIER_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 _STRING_RE = re.compile(
     r"""
@@ -246,6 +250,8 @@ def embed_chunks(
     model_name: str = DEFAULT_EMBEDDING_MODEL,
     batch_size: int = 32,
     normalize_vectors: bool = True,
+    progress_callback: Callable[[int, int], None] | None = None,
+    cancellation_callback: Callable[[], bool] | None = None,
 ) -> list[ChunkEmbedding]:
     if not chunks:
         return []
@@ -260,6 +266,8 @@ def embed_chunks(
         model_name=model_name,
         batch_size=batch_size,
         normalize_vectors=normalize_vectors,
+        progress_callback=progress_callback,
+        cancellation_callback=cancellation_callback,
     )
     return [
         ChunkEmbedding(
@@ -351,6 +359,7 @@ def _encode_matrix(
     normalize_vectors: bool = True,
     attention_budget_bytes: int | None = None,
     progress_callback: Callable[[int, int], None] | None = None,
+    cancellation_callback: Callable[[], bool] | None = None,
 ) -> np.ndarray:
     """Encode ``texts`` into a float32 matrix, batching by measured attention cost.
 
@@ -378,7 +387,11 @@ def _encode_matrix(
 
     Vectors are returned in the caller's original order.
     """
+    if cancellation_callback is not None and cancellation_callback():
+        raise EmbeddingCancelledError("embedding computation was cancelled")
     model = _load_model(model_name)
+    if cancellation_callback is not None and cancellation_callback():
+        raise EmbeddingCancelledError("embedding computation was cancelled")
     total = len(texts)
     if total == 0:
         return np.zeros((0, 0), dtype=np.float32)
@@ -399,6 +412,8 @@ def _encode_matrix(
     done = 0
     batches_since_report = 0
     while cursor < total:
+        if cancellation_callback is not None and cancellation_callback():
+            raise EmbeddingCancelledError("embedding computation was cancelled")
         batch = _next_batch(
             order,
             cursor,
@@ -423,6 +438,9 @@ def _encode_matrix(
             _release_cuda_cache()
             budget = attention_budget_bytes or _available_attention_budget()
             continue
+
+        if cancellation_callback is not None and cancellation_callback():
+            raise EmbeddingCancelledError("embedding computation was cancelled")
 
         cost.observe(_attention_elements(batch, lengths, heads=heads), peak_bytes)
         _LAST_ENCODE_PEAK_BYTES = max(_LAST_ENCODE_PEAK_BYTES, peak_bytes)
@@ -608,12 +626,16 @@ def _embed_texts(
     model_name: str = DEFAULT_EMBEDDING_MODEL,
     batch_size: int = 32,
     normalize_vectors: bool = True,
+    progress_callback: Callable[[int, int], None] | None = None,
+    cancellation_callback: Callable[[], bool] | None = None,
 ) -> list[list[float]]:
     matrix = _encode_matrix(
         texts,
         model_name=model_name,
         batch_size=batch_size,
         normalize_vectors=normalize_vectors,
+        progress_callback=progress_callback,
+        cancellation_callback=cancellation_callback,
     )
     return [vector.astype(float).tolist() for vector in matrix]
 

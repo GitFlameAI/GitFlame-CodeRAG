@@ -2,14 +2,21 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import secrets
+import threading
 
 import uvicorn
-from fastapi import FastAPI, Header, HTTPException, Query, status
+from fastapi import FastAPI, Header, HTTPException, Query, Request, status
 from fastapi.concurrency import run_in_threadpool
 
-from gitflame_coderag.api.indexing import DatabaseIndexBackend, IndexBackend
+from gitflame_coderag.api.indexing import (
+    DatabaseIndexBackend,
+    IndexBackend,
+    IndexingCancelledError,
+)
+from gitflame_coderag.api.logging_config import setup_logging
 from gitflame_coderag.api.models import (
     HealthResponse,
     IndexRequest,
@@ -32,6 +39,7 @@ def create_app(
     backend: SearchBackend | None = None,
     index_backend: IndexBackend | None = None,
 ) -> FastAPI:
+    setup_logging("rag-service")
     resolved_settings = settings or ApiSettings.from_env()
     resolved_settings.validate()
     repository = CodeRAGRepository(create_engine_from_url(resolved_settings.database_url))
@@ -99,22 +107,53 @@ def create_app(
 
     @application.post("/indexes", response_model=IndexResponse)
     async def index_repository(
-        request: IndexRequest,
+        payload: IndexRequest,
+        http_request: Request,
         authorization: str | None = Header(default=None),
     ) -> IndexResponse:
         _authorize(authorization, resolved_settings.api_key)
+        cancellation_event = threading.Event()
+
+        def run_index() -> IndexResponse:
+            if isinstance(resolved_index_backend, DatabaseIndexBackend):
+                return resolved_index_backend.index(payload, cancellation_event)
+            return resolved_index_backend.index(payload)
+
+        task = asyncio.create_task(run_in_threadpool(run_index))
         try:
-            return await run_in_threadpool(resolved_index_backend.index, request)
+            while True:
+                try:
+                    return await asyncio.wait_for(asyncio.shield(task), timeout=0.25)
+                except TimeoutError:
+                    if await http_request.is_disconnected():
+                        cancellation_event.set()
+                        logger.warning(
+                            "rag_index_cancelled repository_id=%s reason=client_disconnected",
+                            payload.repository_id,
+                        )
+                        raise HTTPException(
+                            status_code=499,
+                            detail="repository indexing client disconnected",
+                        )
+        except IndexingCancelledError as exc:
+            raise HTTPException(status_code=499, detail=str(exc)) from exc
         except ValueError as exc:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail=str(exc),
             ) from exc
+        except HTTPException:
+            raise
         except Exception as exc:
+            logger.exception(
+                "rag_index_failed repository_id=%s", payload.repository_id
+            )
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="repository indexing failed",
             ) from exc
+        finally:
+            cancellation_event.set()
 
     return application
 
